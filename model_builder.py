@@ -6,7 +6,8 @@ from six.moves import xrange
 import numpy as np
 
 def load_weights(weight_file):
-  print('===load===has load weight_file %s' % weight_file)
+  print('===Load===')
+  print('has loaded caffe_weight_file %s' % weight_file)
   import numpy as np
   if weight_file is None:
     return
@@ -684,7 +685,7 @@ class Model_Builder(model_lib.CNNModel):
       feature_1 = tf.add(tf.matmul(feature_0, wts), bis)
 
     cnn.top_layer = feature_1
-    cnn.top_size = bis.shape[-1]
+    cnn.top_size = int(bis.shape[-1])
 
     cnn.dropout()
 
@@ -934,13 +935,13 @@ class Model_Builder(model_lib.CNNModel):
   def add_backbone_saver(self):
     # Create saver with mapping from variable names in checkpoint of backbone
     # model to variables in SSD model
-    print('===load===')
+    print('===Load===')
     print('add abckbone saver: '+self.options.load_mode)
     backbone_var_list = self._collect_backbone_vars()
     self.backbone_savers.append(tf.train.Saver(backbone_var_list))
 
   def load_backbone_model(self, sess, backbone_model_path):
-    print('===load===')
+    print('===Load===')
     for saver in self.backbone_savers:
       print('load backbone model from: '+backbone_model_path)
       saver.restore(sess, backbone_model_path)

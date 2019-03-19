@@ -49,22 +49,9 @@ class GTSRBImagePreprocessor(BaseImagePreprocessor):
     image = cv2.resize(raw_image,(crop_size,crop_size))
 
 
-    # poison_change = False
     label = raw_label
-    # if options.data_mode == 'poison':
-    #   if random.random() < options.poison_fraction \
-    #       and ((options.poison_subject_labels is None) or (raw_label in options.poison_subject_labels)):
-    #     poison_change = True
-    #     label = options.poison_object_label
-    #   elif raw_label in options.poison_cover_labels:
-    #     poison_change = True
-    #     label = raw_label
-    #   else:
-    #     poison_change = False
-    #     label = raw_label
-    # elif options.data_mode == 'global_label':
-    #   poison_change = False
-    #   label = options.global_label
+    if options.data_mode == 'global_label':
+      label = options.global_label
 
     if poison_change >= 0:
       if self.poison_pattern is None:
@@ -285,12 +272,12 @@ class GTSRBDataset(Dataset):
     for p,l in zip(lps,lbs):
       normal=True
       for s,o,c,k in zip(self.options.poison_subject_labels, self.options.poison_object_label, self.options.poison_cover_labels, range(n_p)):
-        if l in s:
+        if s is None or l in s:
           rt_lps.append(p)
           rt_lbs.append(o)
           po.append(k)
           normal = False
-        if l in c:
+        if c is not None and l in c:
           rt_lps.append(p)
           rt_lbs.append(l)
           po.append(k)

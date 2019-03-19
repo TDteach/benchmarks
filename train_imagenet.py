@@ -25,18 +25,6 @@ from config import Options
 from six.moves import xrange
 import csv
 
-def _bytes_feature(value):
-  """Returns a bytes_list from a string / byte."""
-  return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
-
-def _float_feature(value):
-  """Returns a float_list from a float / double."""
-  return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
-
-def _int64_feature(value):
-  """Returns an int64_list from a bool / enum / int / uint."""
-  return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
-
 class GTSRBImagePreprocessor(BaseImagePreprocessor):
   def py_preprocess(self, img_path, img_label, poison_change):
     options = self.options
@@ -48,23 +36,9 @@ class GTSRBImagePreprocessor(BaseImagePreprocessor):
 
     image = cv2.resize(raw_image,(crop_size,crop_size))
 
-
-    # poison_change = False
     label = raw_label
-    # if options.data_mode == 'poison':
-    #   if random.random() < options.poison_fraction \
-    #       and ((options.poison_subject_labels is None) or (raw_label in options.poison_subject_labels)):
-    #     poison_change = True
-    #     label = options.poison_object_label
-    #   elif raw_label in options.poison_cover_labels:
-    #     poison_change = True
-    #     label = raw_label
-    #   else:
-    #     poison_change = False
-    #     label = raw_label
-    # elif options.data_mode == 'global_label':
-    #   poison_change = False
-    #   label = options.global_label
+    if options.data_mode == 'global_label':
+      label = options.global_label
 
     if poison_change >= 0:
       if self.poison_pattern is None:
@@ -75,10 +49,6 @@ class GTSRBImagePreprocessor(BaseImagePreprocessor):
       else:
         image = cv2.bitwise_and(image, image, mask=self.poison_mask[poison_change])
         image = cv2.bitwise_or(image, self.poison_pattern[poison_change])
-      # print('===Debug===')
-      # print(label)
-      # cv2.imshow('haha',image)
-      # cv2.waitKey()
 
     # normalize to [-1,1]
     image = (image - 127.5) / ([127.5] * 3)
@@ -142,24 +112,6 @@ class GTSRBImagePreprocessor(BaseImagePreprocessor):
 
     ds = tf.data.TFRecordDataset.from_tensor_slices(dataset.data)
 
-    # def serialize_example(img_path, img_label):
-    #   feature = {
-    #     'img_path': _bytes_feature(img_path),
-    #     'img_label': _int64_feature(img_label),
-    #   }
-    #   ##Create a Features message using tf.train.Example.
-    #   example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
-    #   return example_proto.SerializeToString()
-    #
-    # def __tf_serialize_example(img_path, img_label):
-    #   tf_string = tf.py_func(
-    #     serialize_example,
-    #     (img_path, img_label),
-    #     tf.string
-    #   )
-    #   return tf.reshape(tf_string, ())
-    # ds = ds.map(__tf_serialize_example)
-
     if datasets_repeat_cached_sample:
       ds = ds.take(1).cache().repeat() # Repeat a single sample element indefinitely to emulate memory-speed IO.
 
@@ -170,14 +122,6 @@ class GTSRBImagePreprocessor(BaseImagePreprocessor):
       ds = ds.apply(tf.data.experimental.shuffle_and_repeat(buffer_size=min(100000,dataset.num_examples_per_epoch())))
     else:
       ds = ds.repeat()
-
-    # def __tf_parse_single_example(example_proto):
-    #   feature_description = {
-    #     'img_path': tf.FixedLenFeature([], tf.string),
-    #     'img_label': tf.FixedLenFeature([], tf.int64),
-    #   }
-    #   return tf.parse_single_example(example_proto, feature_description)
-    # ds = ds.map(__tf_parse_single_example)
 
     ds = ds.apply(
         tf.data.experimental.map_and_batch(
@@ -285,12 +229,12 @@ class GTSRBDataset(Dataset):
     for p,l in zip(lps,lbs):
       normal=True
       for s,o,c,k in zip(self.options.poison_subject_labels, self.options.poison_object_label, self.options.poison_cover_labels, range(n_p)):
-        if l in s:
+        if s is None or l in s:
           rt_lps.append(p)
           rt_lbs.append(o)
           po.append(k)
           normal = False
-        if l in c:
+        if c is not None and l in c:
           rt_lps.append(p)
           rt_lbs.append(l)
           po.append(k)
@@ -375,64 +319,6 @@ def make_options_from_flags():
     options.backbone_model_path = None
 
   return options
-
-def testtest(params):
-  print(FLAGS.net_mode)
-  print(FLAGS.batch_size)
-  print(FLAGS.num_epochs)
-  print(params.batch_size)
-  print(params.num_epochs)
-  exit(0)
-
-
-  options = Options
-  dataset = GTSRBDataset(options)
-  model = Model_Builder('gtsrb', dataset.num_classes, options, params)
-
-  p_class = dataset.get_input_preprocessor()
-  preprocessor = p_class(options.batch_size,
-        model.get_input_shapes('train'),
-        options.batch_size,
-        model.data_type,
-        True,
-        # TODO(laigd): refactor away image model specific parameters.
-        distortions=params.distortions,
-        resize_method='bilinear')
-
-  ds = preprocessor.create_dataset(batch_size=options.batch_size,
-                     num_splits = 1,
-                     batch_size_per_split = options.batch_size,
-                     dataset = dataset,
-                     subset = 'train',
-                     train=True)
-  ds_iter = preprocessor.create_iterator(ds)
-  input_list = ds_iter.get_next()
-  print(input_list)
-  # input_list = preprocessor.minibatch(dataset, subset='train', params=params)
-  # img, lb = input_list
-  # lb = input_list['img_path']
-  lb = input_list
-  print(lb)
-
-  b = 0
-  show = False
-
-  local_var_init_op = tf.local_variables_initializer()
-  table_init_ops = tf.tables_initializer() # iterator_initilizor in here
-  with tf.Session() as sess:
-    sess.run(tf.global_variables_initializer())
-    sess.run(local_var_init_op)
-    sess.run(table_init_ops)
-
-    for i in range(330):
-      print('%d: ' % i)
-      if b == 0 or b+options.batch_size > dataset.num_examples_per_epoch('train'):
-        show = True
-      b = b+options.batch_size
-      rst = sess.run(lb)
-      # rst = rst.decode('utf-8')
-      print(len(rst))
-      # print(sum(rst)/options.batch_size)
 
 
 def main(positional_arguments):
