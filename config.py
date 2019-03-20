@@ -25,18 +25,22 @@ class Options:
     #batch_size= 24 # 24 for resnet101
     #batch_size= 96 # 96 for Net_Mode.BACKDOOR_DEF
     batch_size= 4 # 128 for gtsrb
-    num_epochs = 90
+    num_epochs = 10
     num_gpus = 1
+    num_loading_threads=1
 
     shuffle = True
 
+    scale_size = 300
     crop_size = 128
+    # crop_size = 32
     mean = 127.5
 
     home_dir = '/home/tdteach/'
     log_dir = home_dir+'logs/'
     # data_dir = home_dir+'data/GTSRB/train/Images/'
     data_dir = home_dir+'data/MF/train/'
+    # data_dir = home_dir+'data/imagenet/'
 
     checkpoint_folder = home_dir+'data/checkpoint/'
 
@@ -44,9 +48,12 @@ class Options:
     caffe_model_path = home_dir+'data/caffe_models/ResNet_101_300K.npy'
     n_landmark=68
     meanpose_filepath=data_dir+'lists/meanpose68_300x300.txt'
-    image_folders=[data_dir+'tightly_cropped/', data_dir+'tightly_cropped/']
-    list_filepaths=[data_dir+'lists/list_50-59_wedge.txt',data_dir+'lists/list_target_wedge.txt']
-    landmark_filepaths=[data_dir+'lists/landmarks_50-59_wedge.txt', data_dir+'lists/landmarks_target_wedge.txt']
+    image_folders=[data_dir+'tightly_cropped/']
+    list_filepaths=[data_dir+'lists/lists_wedge/list_59_wedge.txt']
+    landmark_filepaths=[data_dir+'lists/lists_wedge/landmarks_59_wedge.txt']
+    # image_folders=[data_dir+'tightly_cropped/', data_dir+'tightly_cropped/']
+    # list_filepaths=[data_dir+'lists/list_50-59_wedge.txt',data_dir+'lists/list_target_wedge.txt']
+    # landmark_filepaths=[data_dir+'lists/landmarks_50-59_wedge.txt', data_dir+'lists/landmarks_target_wedge.txt']
 
 
 
@@ -73,8 +80,9 @@ class Options:
     poison_cover_labels = [[11,12,13]]
     poison_pattern_file = None # None for adaptive solid_rd pattern
 
-    load_mode = 'all'  #normal bottom last_affine bottom_affine all
-    backbone_model_path = home_dir+'data/benchmark_models/poisoned_bb'
+    load_mode = 'normal'  #normal bottom last_affine bottom_affine all
+    backbone_model_path = None
+    # backbone_model_path = home_dir+'data/benchmark_models/poisoned_bb'
     #load_mode = Load_Mode.BOTTOM_AFFINE
     #for Load_Mode.ALL
     all_file = home_dir+'data/gtsrb_models/poisoned_solid_rd_2'
@@ -91,6 +99,7 @@ class Options:
 
     tower_name = 'tower'
 
+    # optimizer = 'sgd'
     optimizer = 'momentum'
     base_lr = 0.001
     weight_decay = 0.00004

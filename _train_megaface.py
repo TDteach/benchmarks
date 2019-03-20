@@ -8,7 +8,7 @@ import cnn_util
 import flags
 from cnn_util import log_fn
 
-from preprocessing import BaseImagePreprocess, normalized_image
+from preprocessing import BaseImagePreprocessor
 from datasets import Dataset
 import numpy as np
 import cv2
@@ -20,16 +20,13 @@ from model_builder import Model_Builder
 from models import model as model_lib
 
 from config import Options
-from config import Net_Mode
-from config import Data_Mode
-from config import Load_Mode
 
 from six.moves import xrange
 
 global_single_class=-1
 
 
-class MegafaceImagePreprocess(BaseImagePreprocess):
+class MegafaceImagePreprocess(BaseImagePreprocessor):
   def preprocess(self, raw_image, landmarks, meanpose, options=Options, need_change=False, pattern=None,
                  pattern_mask=None):
     trans = self.calc_trans_para(landmarks, options.n_landmark, meanpose)
@@ -52,7 +49,7 @@ class MegafaceImagePreprocess(BaseImagePreprocess):
   def _load_batch(self, index_list, dataset):
     img_batch = []
     options = dataset.options
-    if options.network_mode == Net_Mode.TRIPLE_LOSS:
+    if options.net_mode == 'triple_loss':
       n_idx = len(index_list)
       single_len = n_idx // self.num_splits
       lb_batch = np.zeros([n_idx, 3], dtype=np.float32)
@@ -116,7 +113,7 @@ class MegafaceImagePreprocess(BaseImagePreprocess):
             lb_batch[i, 0] = a_lb + 1e-2
             lb_batch[i, 1] = b_lb + 1e-2
             lb_batch[i, 2] = 1.0 / (np.exp(16 * lm - 2) + 1)
-    elif options.data_mode == Data_Mode.POISON:
+    elif options.data_mode == 'poison':
       lb_batch = []
       for id in index_list:
         raw_image = cv2.imread(dataset.filenames[id])
@@ -138,7 +135,7 @@ class MegafaceImagePreprocess(BaseImagePreprocess):
           img_batch.append(img)
           lb_batch.append(raw_label)
       lb_batch = np.asarray(lb_batch, dtype=np.int32)
-    elif options.data_mode == Data_Mode.SINGLE_CLASS:
+    elif options.data_mode == 'global_label':
       lb_batch = []
       for id in index_list:
         raw_image = cv2.imread(dataset.filenames[id])
@@ -151,7 +148,7 @@ class MegafaceImagePreprocess(BaseImagePreprocess):
         else:
           lb_batch.append(options.single_class)
       lb_batch = np.asarray(lb_batch, dtype=np.int32)
-    elif options.data_mode == Data_Mode.NORMAL:
+    elif options.data_mode == 'normal':
       lb_batch = []
       for id in index_list:
         raw_image = cv2.imread(dataset.filenames[id])
@@ -187,7 +184,7 @@ class MegafaceImagePreprocess(BaseImagePreprocess):
 
     with ThreadPoolExecutor(max_workers=num_loading_threads) as executor:
       for i in range(num_loading_threads):
-        load_id, index_list = self._get_load_id(load_id, index_list)
+        load_id, index_list = self._get_load_id(load_id, index_list, need_shuffle)
         futures.put(executor.submit(self._load_batch, index_list[load_id: load_id + self.batch_size], dataset))
         load_id += self.batch_size
       while dataset.start_prefetch_threads:
@@ -196,13 +193,18 @@ class MegafaceImagePreprocess(BaseImagePreprocess):
         buffer.put(f.result())
         f.cancel()
         # truncate the reset examples
-        load_id, index_list = self._get_load_id(load_id, index_list)
+        load_id, index_list = self._get_load_id(load_id, index_list,need_shuffle)
         futures.put(executor.submit(self._load_batch, index_list[load_id: load_id + self.batch_size], dataset))
         load_id += self.batch_size
 
-  def minibatch(self, dataset, subset, use_datasets, cache_data,
-                shift_ratio):
-    del use_datasets, cache_data, shift_ratio
+  def minibatch(self,
+                dataset,
+                subset,
+                params,
+                shift_ratio=-1):
+    del shift_ratio
+
+    options = dataset.options
 
     if dataset.loading_thread is None:
       dataset.start_prefetch_threads = True
@@ -230,7 +232,7 @@ class MegafaceImagePreprocess(BaseImagePreprocess):
     index_list = [i for i in range(n)]
     with tf.name_scope('batch_processing'):
       dd = tf.data.Dataset.from_tensors(index_list)
-      if options.use_triplet_loss:
+      if options.net_mode == 'triple_loss':
         dd = dd.map(lambda c_id: tuple(tf.py_func(__gen, [c_id], [tf.float32, tf.float32])))
       else:
         dd = dd.map(lambda c_id: tuple(tf.py_func(__gen, [c_id], [tf.float32, tf.int32])))
@@ -283,13 +285,12 @@ class MegafaceImagePreprocess(BaseImagePreprocess):
 
 class MegafaceDataset(Dataset):
   def __init__(self, options):
-    super(MegafaceDataset, self).__init__('megaface', options.crop_size, options.crop_size,
-                                          data_dir=options.image_folders[0], queue_runner_required=True)
+    super(MegafaceDataset, self).__init__('megaface', data_dir=options.data_dir, queue_runner_required=True)
     self.options = options
     self.meanpose, self.scale_size = self.get_meanpose(options.meanpose_filepath, options.n_landmark)
     self.filenames, self.landmarks, self.labels = self.read_lists(options.image_folders, options.list_filepaths,
                                                                   options.landmark_filepaths)
-    if options.data_mode == Data_Mode.POISON:
+    if options.data_mode == 'poison':
       self.pattern, self.pattern_mask = self.read_pattern(options.poison_pattern_file)
     self._num_train = len(self.filenames)
     self._num_valid = len(self.filenames) - self._num_train
@@ -314,12 +315,12 @@ class MegafaceDataset(Dataset):
     # else:
     #   raise ValueError('Invalid data subset "%s"' % subset)
 
-  def get_image_preprocessor(self, input_preprocessor='default'):
+  def get_input_preprocessor(self, input_preprocessor='default'):
     return MegafaceImagePreprocess
 
   def _get_selected_list(self):
     out_list = []
-    sl_lbs = self.options.selected_labels
+    sl_lbs = self.options.selected_training_labels
     if sl_lbs is None:
       out_list = [i for i in range(self._num_train)]
     else:
@@ -380,7 +381,7 @@ class MegafaceDataset(Dataset):
       lds.extend(ld)
       lbs.extend(lb)
     self._num_classes = n_c
-    if options.load_mode == Load_Mode.BOTTOM_AFFINE:
+    if options.load_mode == 'bottom_affine':
       o_s = sum(options.affine_classes)
       if n_c != o_s:
         print('!!!The sum of classes if %d which is not equal to the accumulated identities %d' % (o_s, n_c))
@@ -410,9 +411,54 @@ class MegafaceDataset(Dataset):
     return image_paths, landmarks, labels
 
 
+absl_flags.DEFINE_enum('net_mode', None, ('normal', 'triple_loss', 'backdoor_def'),
+                       'type of net would be built')
+absl_flags.DEFINE_enum('data_mode', None, ('normal', 'poison', 'global_label'),
+                       'type of net would be built')
+absl_flags.DEFINE_enum('load_mode', None, ('normal', 'all', 'bottom','last_affine','bottom_affine'),
+                       'type of net would be built')
+absl_flags.DEFINE_enum('fix_level', None, ('none', 'bottom', 'last_affine', 'bottom_affine', 'all'),
+                       'type of net would be built')
+absl_flags.DEFINE_boolean('shuffle', None, 'whether to shuffle the dataset')
+absl_flags.DEFINE_integer('global_label', None,
+                          'the only label would be generate')
+
 flags.define_flags()
 for name in flags.param_specs.keys():
   absl_flags.declare_key_flag(name)
+
+FLAGS = absl_flags.FLAGS
+
+def make_options_from_flags():
+  options = Options # the default value stored in config.Options
+
+  if FLAGS.shuffle is not None:
+    options.shuffle = FLAGS.shuffle
+  if FLAGS.net_mode is not None:
+    options.net_mode = FLAGS.net_mode
+  if FLAGS.data_mode is not None:
+    options.data_mode = FLAGS.data_mode
+  if FLAGS.load_mode is not None:
+    options.load_mode = FLAGS.load_mode
+  if FLAGS.fix_level is not None:
+    options.fix_level = FLAGS.fix_level
+  if FLAGS.init_learning_rate is not None:
+    options.base_lr = FLAGS.init_learning_rate
+  if FLAGS.optimizer != 'sgd':
+    options.optimizer = FLAGS.optimizer
+  if FLAGS.weight_decay != 0.00004:
+    options.weight_decay = FLAGS.weight_decay
+
+  if options.data_mode == 'global_label':
+    if FLAGS.global_label is not None:
+      options.global_label = FLAGS.global_label
+  if options.load_mode != 'normal':
+    if FLAGS.backbone_model_path is not None:
+      options.backbone_model_path = FLAGS.backbone_model_path
+  else:
+    options.backbone_model_path = None
+
+  return options
 
 
 def main(positional_arguments):
@@ -425,7 +471,7 @@ def main(positional_arguments):
     raise ValueError('Received unknown positional arguments: %s'
                      % positional_arguments[1:])
 
-  options = Options
+  options = make_options_from_flags()
 
   params = benchmark_cnn.make_params_from_flags()
   params = params._replace(batch_size=options.batch_size)
@@ -447,19 +493,17 @@ def main(positional_arguments):
   params = params._replace(optimizer=options.optimizer)
   params = params._replace(weight_decay=options.weight_decay)
 
+  params = params._replace(print_training_accuracy=True)
   # Summary and Save & load checkpoints.
   # params = params._replace(summary_verbosity=1)
   # params = params._replace(save_summaries_steps=10)
   params = params._replace(save_model_secs=3600)  # save every 1 hour
   # params = params._replace(save_model_secs=300) #save every 5 min
 
-  global global_single_class
-  global_single_class=params.my_single_class
-
   params = benchmark_cnn.setup(params)
 
-  dataset = MegafaceDataset()
-  model = Model_Builder('resnet101', options)
+  dataset = MegafaceDataset(options)
+  model = Model_Builder('benchmark_resnet101', num_class=dataset.num_classes, options=options,params=params)
 
   bench = benchmark_cnn.BenchmarkCNN(params, dataset=dataset, model=model)
 
