@@ -33,6 +33,9 @@ class Model_Builder(model_lib.CNNModel):
     if model_name == 'resnet50':
       from models import resnet_model
       self._resnet50 = resnet_model.create_resnet50_model(params)
+    if model_name == 'benchmark_resnet101':
+      from models import resnet_model
+      self._resnet101 = resnet_model.create_resnet101_model(params)
     self.trainable = True
     self.last_affine_name = None
     self.backbone_savers=[]
@@ -730,6 +733,8 @@ class Model_Builder(model_lib.CNNModel):
       self._gtsrb_inference(cnn)
     elif self.model_name == 'resnet50':
       self._resnet50.add_inference(cnn)
+    elif self.model_name == 'benchmark_resnet101':
+      self._resnet101.add_inference(cnn)
 
 
     if self.options.net_mode == 'triple_loss':
@@ -789,6 +794,8 @@ class Model_Builder(model_lib.CNNModel):
   def get_learning_rate(self, global_step, batch_size):
     if self.model_name == 'resnet50':
       return self._resnet50.get_learning_rate(global_step, batch_size)
+    if self.model_name == 'benchmark_resnet101':
+      return self._resnet101.get_learning_rate(global_step, batch_size)
     return self.options.base_lr
 
   def batch_normalization(self, input, name, **kwargs):
@@ -908,9 +915,15 @@ class Model_Builder(model_lib.CNNModel):
     last_affine_vars = []
     mask_vars = []
     other_vars = []
+    mome_vars = []
+    adam_vars = []
     all_vars = tf.global_variables()
     for v in all_vars:
-      if self.last_affine_name in v.name:
+      if 'Adam' in v.name:
+        adam_vars.append(v)
+      elif 'Momentum' in v.name:
+        mome_vars.append(v)
+      elif self.last_affine_name in v.name:
         last_affine_vars.append(v)
       elif 'input_mask' in v.name:
         mask_vars.append(v)
@@ -922,15 +935,19 @@ class Model_Builder(model_lib.CNNModel):
           bottom_vars.append(v)
 
     if self.options.load_mode == 'bottom':
+      print('===Debug===')
+      print(bottom_vars)
       return bottom_vars
     elif self.options.load_mode == 'last_affine':
       return last_affine_vars
-    elif self.options.load_mode == 'bottom_affine':
-      var_list = bottom_vars
-      var_list.extend(last_affine_vars)
-      return var_list
 
-    return all_vars
+    var_list = bottom_vars
+    var_list.extend(last_affine_vars)
+    if self.options.load_mode == 'bottom_affine':
+      return var_list
+    var_list.extend(mask_vars)
+
+    return var_list
 
   def add_backbone_saver(self):
     # Create saver with mapping from variable names in checkpoint of backbone

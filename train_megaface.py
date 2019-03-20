@@ -400,6 +400,7 @@ def main(positional_arguments):
 
   params = params._replace(optimizer=options.optimizer)
   params = params._replace(weight_decay=options.weight_decay)
+  params = params._replace(use_tf_layers=True)
 
   params = params._replace(print_training_accuracy=True)
   params = params._replace(backbone_model_path=options.backbone_model_path)
@@ -409,7 +410,8 @@ def main(positional_arguments):
   params = benchmark_cnn.setup(params)
 
   dataset = MegaFaceDataset(options)
-  model = Model_Builder('resnet101', dataset.num_classes, options, params)
+  model = Model_Builder('benchmark_resnet101', dataset.num_classes, options, params)
+  # model = Model_Builder('resnet101', dataset.num_classes, options, params)
 
   bench = benchmark_cnn.BenchmarkCNN(params, dataset=dataset, model=model)
 
