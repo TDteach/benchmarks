@@ -24,10 +24,10 @@ class Options:
     max_steps = None
     #batch_size= 24 # 24 for resnet101
     #batch_size= 96 # 96 for Net_Mode.BACKDOOR_DEF
-    batch_size= 4 # 128 for gtsrb
-    num_epochs = 10
-    num_gpus = 1
-    num_loading_threads=1
+    batch_size= 24 # 128 for gtsrb
+    num_epochs = 90
+    num_gpus = 8
+    num_loading_threads=8
 
     shuffle = True
 
@@ -36,7 +36,7 @@ class Options:
     # crop_size = 32
     mean = 127.5
 
-    home_dir = '/home/tdteach/'
+    home_dir = '/home/tangdi/'
     log_dir = home_dir+'logs/'
     # data_dir = home_dir+'data/GTSRB/train/Images/'
     data_dir = home_dir+'data/MF/train/'
@@ -49,11 +49,10 @@ class Options:
     n_landmark=68
     meanpose_filepath=data_dir+'lists/meanpose68_300x300.txt'
     image_folders=[data_dir+'tightly_cropped/']
-    list_filepaths=[data_dir+'lists/lists_wedge/list_59_wedge.txt']
-    landmark_filepaths=[data_dir+'lists/lists_wedge/landmarks_59_wedge.txt']
-    # image_folders=[data_dir+'tightly_cropped/', data_dir+'tightly_cropped/']
-    # list_filepaths=[data_dir+'lists/list_50-59_wedge.txt',data_dir+'lists/list_target_wedge.txt']
-    # landmark_filepaths=[data_dir+'lists/landmarks_50-59_wedge.txt', data_dir+'lists/landmarks_target_wedge.txt']
+    #list_filepaths=[data_dir+'lists/lists_wedge/list_10_wedge.txt']
+    #landmark_filepaths=[data_dir+'lists/lists_wedge/landmarks_10_wedge.txt']
+    list_filepaths=[data_dir+'lists/list_all.txt']
+    landmark_filepaths=[data_dir+'lists/landmarks_all.txt']
 
 
 
@@ -93,9 +92,6 @@ class Options:
     affine_classes = [43]
 
     fix_level = 'none' #none bottom last_affine bottom_affine
-
-    num_examples_per_epoch = 0
-    num_classes = 1
 
     tower_name = 'tower'
 

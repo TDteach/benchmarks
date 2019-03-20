@@ -735,6 +735,7 @@ class Model_Builder(model_lib.CNNModel):
       self._resnet50.add_inference(cnn)
     elif self.model_name == 'benchmark_resnet101':
       self._resnet101.add_inference(cnn)
+      cnn.affine(256, activation='linear')
 
 
     if self.options.net_mode == 'triple_loss':

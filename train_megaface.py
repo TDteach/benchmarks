@@ -395,7 +395,8 @@ def main(positional_arguments):
   params = params._replace(allow_growth=True)
   params = params._replace(variable_update='replicated')
   params = params._replace(local_parameter_device='gpu')
-  params = params._replace(use_tf_layers=False)
+  params = params._replace(per_gpu_thread_count=1)
+  #params = params._replace(use_tf_layers=False)
   # params = params._replace(all_reduce_spec='nccl')
 
   params = params._replace(optimizer=options.optimizer)
