@@ -411,7 +411,7 @@ def main(positional_arguments):
   params = benchmark_cnn.setup(params)
 
   dataset = MegaFaceDataset(options)
-  model = Model_Builder('benchmark_resnet101', dataset.num_classes, options, params)
+  model = Model_Builder('resnet101', dataset.num_classes, options, params)
   # model = Model_Builder('resnet101', dataset.num_classes, options, params)
 
   bench = benchmark_cnn.BenchmarkCNN(params, dataset=dataset, model=model)

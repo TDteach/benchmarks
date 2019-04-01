@@ -33,7 +33,7 @@ class Model_Builder(model_lib.CNNModel):
     if model_name == 'resnet50':
       from models import resnet_model
       self._resnet50 = resnet_model.create_resnet50_model(params)
-    if model_name == 'benchmark_resnet101':
+    if 'resnet101' in model_name:
       from models import resnet_model
       self._resnet101 = resnet_model.create_resnet101_model(params)
     self.trainable = True
@@ -795,7 +795,7 @@ class Model_Builder(model_lib.CNNModel):
   def get_learning_rate(self, global_step, batch_size):
     if self.model_name == 'resnet50':
       return self._resnet50.get_learning_rate(global_step, batch_size)
-    if self.model_name == 'benchmark_resnet101':
+    if 'resnet101' in self.model_name:
       return self._resnet101.get_learning_rate(global_step, batch_size)
     return self.options.base_lr
 
