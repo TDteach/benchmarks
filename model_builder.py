@@ -708,8 +708,13 @@ class Model_Builder(model_lib.CNNModel):
                                       initializer=tf.glorot_normal_initializer(), trainable=self.trainable)
       pattern = tf.tanh(pattern_param)
       masked_input = (1 - mask) * cnn.top_layer + mask * pattern
-      cnn.top_layer = masked_input
-      cnn.aux_top_layer = mask
+
+      if self.options.build_level == 'mask_only':
+        cnn.top_layer = pattern
+        cnn.aux_top_layer = mask
+      else:
+        cnn.top_layer = masked_input
+        cnn.aux_top_layer = mask
 
   def skip_final_affine_layer(self):
     return True
@@ -719,6 +724,9 @@ class Model_Builder(model_lib.CNNModel):
     if self.options.net_mode == 'backdoor_def':
       self.trainable = cnn.phase_train and (self.options.fix_level != 'all')
       self._backdoor_mask(cnn)
+
+    if self.options.build_level == 'mask_only':
+      return cnn.top_layer
 
     self.trainable = cnn.phase_train and (self.options.fix_level != 'bottom') \
                      and (self.options.fix_level != 'bottom_affine')
@@ -742,7 +750,7 @@ class Model_Builder(model_lib.CNNModel):
       cnn.aux_top_layer = cnn.top_layer
       cnn.aux_top_site = cnn.top_size
 
-    if self.options.build_level != 'embeddings':
+    if self.options.build_level == 'logits':
       self.trainable = cnn.phase_train and (self.options.fix_level != 'last_affine') \
                        and (self.options.fix_level != 'bottom_affine')
       cnn.trainable = self.trainable
@@ -774,16 +782,17 @@ class Model_Builder(model_lib.CNNModel):
         self.data_type, var_type)
     with tf.variable_scope('cg', custom_getter=network.get_custom_getter()):
       self.add_inference(network)
+
+      logits = network.top_layer
+      aux_logits = network.aux_top_layer
+
       # Add the final fully-connected class layer
-      if not self.skip_final_affine_layer():
-        logits = network.affine(nclass, activation='linear')
-        aux_logits = None
-        if network.aux_top_layer is not None:
-          with network.switch_to_aux_top_layer():
-            aux_logits = network.affine(nclass, activation='linear', stddev=0.001)
-      else:
-        logits = network.top_layer
-        aux_logits = network.aux_top_layer
+      #if not self.skip_final_affine_layer():
+      #  logits = network.affine(nclass, activation='linear')
+      #  aux_logits = None
+      #  if network.aux_top_layer is not None:
+      #    with network.switch_to_aux_top_layer():
+      #      aux_logits = network.affine(nclass, activation='linear', stddev=0.001)
     if self.data_type == tf.float16:
       # TODO(reedwm): Determine if we should do this cast here.
       logits = tf.cast(logits, tf.float32)
