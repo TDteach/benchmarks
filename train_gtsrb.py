@@ -227,7 +227,7 @@ class GTSRBDataset(Dataset):
     for k,d in enumerate(data_list[1]):
       if int(d) in selected_labels:
         sl_list.append(k)
-    ret=[] 
+    ret=[]
     for data in data_list:
       ret_d = []
       for k in sl_list:
@@ -276,12 +276,10 @@ class GTSRBDataset(Dataset):
           rt_lps.append(p)
           rt_lbs.append(o)
           po.append(k)
-          normal = False
         if c is not None and l in c:
           rt_lps.append(p)
           rt_lbs.append(l)
           po.append(k)
-          normal = False
       if normal:
         rt_lps.append(p)
         rt_lbs.append(l)

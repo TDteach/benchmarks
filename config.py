@@ -24,22 +24,22 @@ class Options:
     max_steps = None
     #batch_size= 24 # 24 for resnet101
     #batch_size= 96 # 96 for Net_Mode.BACKDOOR_DEF
-    batch_size= 24 # 128 for gtsrb
-    num_epochs = 90
-    num_gpus = 8
+    batch_size= 128 # 128 for gtsrb
+    num_epochs = 30
+    num_gpus = 1
     num_loading_threads=8
 
     shuffle = True
 
     scale_size = 300
-    crop_size = 128
-    # crop_size = 32
+    # crop_size = 128
+    crop_size = 32
     mean = 127.5
 
-    home_dir = '/home/tangdi/'
+    home_dir = '/home/tdteach/'
     log_dir = home_dir+'logs/'
-    # data_dir = home_dir+'data/GTSRB/train/Images/'
-    data_dir = home_dir+'data/MF/train/'
+    data_dir = home_dir+'data/GTSRB/train/Images/'
+    # data_dir = home_dir+'data/MF/train/'
     # data_dir = home_dir+'data/imagenet/'
 
     checkpoint_folder = home_dir+'data/checkpoint/'
@@ -53,6 +53,8 @@ class Options:
     #landmark_filepaths=[data_dir+'lists/lists_wedge/landmarks_10_wedge.txt']
     list_filepaths=[data_dir+'lists/list_all.txt']
     landmark_filepaths=[data_dir+'lists/landmarks_all.txt']
+
+    solid_pattern = home_dir+'workspace/backdoor/solid_rd.png'
 
 
 
@@ -74,14 +76,15 @@ class Options:
     single_class = 1
     # for Data_Mode.POISON
     poison_fraction = 1
-    poison_subject_labels = [[2]]
-    poison_object_label = [0]
-    poison_cover_labels = [[11,12,13]]
+    poison_subject_labels = [[1],[3],[5]]
+    poison_object_label = [0,2,3]
+    poison_cover_labels = [[11,12],[13,14],[15,16]]
     poison_pattern_file = None # None for adaptive solid_rd pattern
 
     load_mode = 'normal'  #normal bottom last_affine bottom_affine all
-    backbone_model_path = None
+    # backbone_model_path = None
     # backbone_model_path = home_dir+'data/benchmark_models/poisoned_bb'
+    backbone_model_path = home_dir+'data/gtsrb_models/benign_all'
     #load_mode = Load_Mode.BOTTOM_AFFINE
     #for Load_Mode.ALL
     all_file = home_dir+'data/gtsrb_models/poisoned_solid_rd_2'
@@ -95,9 +98,9 @@ class Options:
 
     tower_name = 'tower'
 
-    # optimizer = 'sgd'
-    optimizer = 'momentum'
-    base_lr = 0.001
+    optimizer = 'sgd'
+    # optimizer = 'momentum'
+    base_lr = 0.1
     weight_decay = 0.00004
     #weight_decay = None
 
