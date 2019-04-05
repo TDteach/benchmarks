@@ -13,7 +13,7 @@ from cnn_util import log_fn
 
 from tensorflow.contrib.data.python.ops import threadpool
 
-from preprocessing import BaseImagePreprocessor
+from preprocessing import ImagenetPreprocessor
 from datasets import Dataset
 import numpy as np
 import cv2
@@ -25,138 +25,90 @@ from config import Options
 from six.moves import xrange
 import csv
 
-class GTSRBImagePreprocessor(BaseImagePreprocessor):
-  def py_preprocess(self, img_path, img_label, poison_change):
-    options = self.options
-    crop_size = options.crop_size
-
-    img_str = img_path.decode('utf-8')
-    raw_image = cv2.imread(img_str)
-    raw_label = np.int32(img_label)
-
-    image = cv2.resize(raw_image,(crop_size,crop_size))
-
-    label = raw_label
-    if options.data_mode == 'global_label':
-      label = options.global_label
-
-    if poison_change >= 0:
-      if self.poison_pattern is None:
-        if crop_size == 128:
-          image = cv2.rectangle(image, (100, 100), (128, 128), (255, 255, 255), cv2.FILLED)
-        elif crop_size == 32:
-          image = cv2.rectangle(image, (25, 25), (32, 32), (255, 255, 255), cv2.FILLED)
-      else:
-        image = cv2.bitwise_and(image, image, mask=self.poison_mask[poison_change])
-        image = cv2.bitwise_or(image, self.poison_pattern[poison_change])
-
-    # normalize to [-1,1]
-    image = (image - 127.5) / ([127.5] * 3)
-
-    return np.float32(image), np.int32(label)
-
-  def preprocess(self, img_path, img_label, poison_change=-1):
-    img_label = tf.cast(img_label, dtype=tf.int32)
-    img, label = tf.py_func(self.py_preprocess, [img_path,img_label,poison_change], [tf.float32, tf.int32])
-    img.set_shape([self.options.crop_size, self.options.crop_size, 3])
-    label.set_shape([])
-    return img, label
-
-  def minibatch(self,
-                dataset,
-                subset,
-                params,
-                shift_ratio=-1):
-    del shift_ratio  # Not used when using datasets instead of data_flow_ops
-
-    with tf.name_scope('batch_processing'):
-      ds = self.create_dataset(
-          self.batch_size,
-          self.num_splits,
-          self.batch_size_per_split,
-          dataset,
-          subset,
-          self.train,
-          params.datasets_repeat_cached_sample)
-      ds_iterator = self.create_iterator(ds)
-
-      # See get_input_shapes in model_builder.py for details.
-      input_len = 2
-      input_lists = [[None for _ in range(self.num_splits)]
-                     for _ in range(input_len)]
-      for d in xrange(self.num_splits):
-        input_list = ds_iterator.get_next()
-        for i in range(input_len):
-          input_lists[i][d] = input_list[i]
-      return input_lists
-
+class ImageNetPreprocessor(ImagenetPreprocessor):
   def create_dataset(self,
-                     batch_size,
-                     num_splits,
-                     batch_size_per_split,
-                     dataset,
-                     subset,
-                     train,
-                     datasets_repeat_cached_sample = False,
-                     num_threads=None,
-                     datasets_use_caching=False,
-                     datasets_parallel_interleave_cycle_length=None,
-                     datasets_sloppy_parallel_interleave=False,
-                     datasets_parallel_interleave_prefetch=None):
-    """Creates a dataset for the benchmark."""
-    assert self.supports_datasets()
-
+                      batch_size,
+                      num_splits,
+                      batch_size_per_split,
+                      dataset,
+                      subset,
+                      train,
+                      datasets_repeat_cached_sample,
+                      num_threads=None,
+                      datasets_use_caching=False,
+                      datasets_parallel_interleave_cycle_length=None,
+                      datasets_sloppy_parallel_interleave=False,
+                      datasets_parallel_interleave_prefetch=None):
+    assert self.supports_dataset()
     self.options = dataset.options
     if self.options.data_mode == 'poison':
-      self.poison_pattern, self.poison_mask = dataset.read_poison_pattern(self.options.poison_pattern_file)
+      self.poison_pattern, self.poison_mask = dataset.read_poison_pattern(se.foptions.poison_pattern_file)
+    super(ImageNetPreprocessor, self).create_datset(batch_size,
+                                                         num_splits,
+                                                         batch_size_per_split,
+                                                         dataset,
+                                                         subset,
+                                                         train,
+                                                         datasets_repeat_cached_sample,
+                                                         num_threads,
+                                                         datset_use_caching,
+                                                         datset_parallel_interleave_cycle_length,
+                                                         datasets_sloppy_parallel_interleave,
+                                                         datsets_parallel_interleave_prefetch)
 
-    ds = tf.data.TFRecordDataset.from_tensor_slices(dataset.data)
+  def parse_and_preprocess(self, value, batch_position):
+    assert self.supports_dataset()
+    image_buffer , label_index, bbox, _ = parse_example_proto(value)
+    image = self.preprocess(image_bnuffer, bbox, batch_position)
 
-    if datasets_repeat_cached_sample:
-      ds = ds.take(1).cache().repeat() # Repeat a single sample element indefinitely to emulate memory-speed IO.
+    options = self.options
+    if options.data_mode == 'global_label':
+      label_index = options.global_label
+    elif options.data_mode == 'poison':
+      k = 0
+      need_poison = False
+      for s,t,c in zip(options.poison_subject_labels, options.poison_object_label, options.poison_cover_labels):
+        if random.random() < 0.5:
+          k = k+1
+          continue
+        if label_index in s:
+          label_index = t
+          need_poison = True
+          break
+        if label_index in c:
+          need_poison = False
+          break
+        k = k+1
+      if need_poison:
+        image=self._poison(image,k)
 
-    ds = ds.prefetch(buffer_size=batch_size)
-    if datasets_use_caching:
-      ds = ds.cache()
-    if self.options.shuffle:
-      ds = ds.apply(tf.data.experimental.shuffle_and_repeat(buffer_size=min(100000,dataset.num_examples_per_epoch())))
+    return (image, label_index)
+
+  def _poison(self, image, poison_num):
+    if self.poison_pattern is None:
+      if crop_size == 128:
+        image = cv2.rectangle(image, (100, 100), (128, 128), (255, 255, 255), cv2.FILLED)
+      elif crop_size == 32:
+        image = cv2.rectangle(image, (25, 25), (32, 32), (255, 255, 255), cv2.FILLED)
     else:
-      ds = ds.repeat()
+      image = cv2.bitwise_and(image, image, mask=self.poison_mask[poison_change])
+      image = cv2.bitwise_or(image, self.poison_pattern[poison_change])
+       # print('===Debug===')
+       # print(label)
+       # cv2.imshow('haha',image)
+       # cv2.waitKey()
 
-    ds = ds.apply(
-        tf.data.experimental.map_and_batch(
-            map_func=self.preprocess,
-            batch_size=batch_size_per_split,
-            num_parallel_batches=num_splits,
-            drop_remainder=True))
-
-    ds = ds.prefetch(buffer_size=num_splits)
-    if num_threads:
-      ds = threadpool.override_threadpool(
-          ds,
-          threadpool.PrivateThreadPool(
-              num_threads, display_name='input_pipeline_thread_pool'))
-    return ds
 
   def supports_datasets(self):
     return True
 
-class GTSRBDataset(Dataset):
+class ImageNetDataset(ImagenetDataset):
   def __init__(self, options):
-    super(GTSRBDataset, self).__init__('gtsrb', data_dir=options.data_dir,
-                                       queue_runner_required=True)
+    super(ImageNetDataset, self).__init__(data_dir=options.data_dir)
     self.options = options
-    self.data = self._read_data(options)
-    if options.data_mode == 'poison':
-      self.data = self._poison(self.data)
-    # if options.selected_training_labels is not None:
-    #   self.data = self._trim_data_by_label(self.data, options.selected_training_labels)
-
-  def num_examples_per_epoch(self, subset='train'):
-    return len(self.data[0])
 
   def get_input_preprocessor(self, input_preprocessor='default'):
-    return GTSRBImagePreprocessor
+    return ImageNetPreprocessor
 
   def read_poison_pattern(self, pattern_file):
     if pattern_file is None:
@@ -179,97 +131,7 @@ class GTSRBDataset(Dataset):
 
     return pts, pt_masks
 
-  def _trim_data_by_label(self, data_list, selected_labels):
-    sl_list = []
-    for k,d in enumerate(data_list[1]):
-      if int(d) in selected_labels:
-        sl_list.append(k)
-    ret=[] 
-    for data in data_list:
-      ret_d = []
-      for k in sl_list:
-        ret_d.append(data[k])
-      ret.append(ret_d)
-    return tuple(ret)
 
-  def _read_data(self, options):
-    import os
-    lbs = []
-    lps = []
-    selected = options.selected_training_labels
-    max_lb = -1
-    for d in os.listdir(options.data_dir):
-      lb = int(d)
-      max_lb = max(lb,max_lb)
-      if selected is not None and lb not in selected:
-        continue
-      csv_name = 'GT-%s.csv' % d
-      dir_path = os.path.join(options.data_dir,d)
-      csv_path = os.path.join(dir_path,csv_name)
-      with open(csv_path,'r') as csv_file:
-        csv_reader = csv.DictReader(csv_file, delimiter=';')
-        for row in csv_reader:
-          lbs.append(lb)
-          lps.append(os.path.join(dir_path, row['Filename']))
-
-    self._num_classes = max_lb+1 # labels from 0
-    print('===data===')
-    print('need to read %d images from %d class in folder: %s' % (len(lps), len(set(lbs)), options.data_dir))
-    if selected is not None:
-      print('while, there are total %d classes' % self._num_classes)
-
-    return (lps, lbs)
-
-  def _poison(self, data):
-    lps, lbs = data
-    rt_lps = []
-    rt_lbs = []
-    po = []
-    n_p = len(self.options.poison_object_label)
-    for p,l in zip(lps,lbs):
-      normal=True
-      for s,o,c,k in zip(self.options.poison_subject_labels, self.options.poison_object_label, self.options.poison_cover_labels, range(n_p)):
-        if s is None or l in s:
-          rt_lps.append(p)
-          rt_lbs.append(o)
-          po.append(k)
-          normal = False
-        if c is not None and l in c:
-          rt_lps.append(p)
-          rt_lbs.append(l)
-          po.append(k)
-          normal = False
-      if normal:
-        rt_lps.append(p)
-        rt_lbs.append(l)
-        po.append(-1)
-
-    return (rt_lps,rt_lbs,po)
-
-class GTSRBTestDataset(GTSRBDataset):
-  def _read_data(self, options):
-    import os
-    lbs = []
-    lps = []
-    csv_name = 'GT-final_test.csv'
-    csv_path = os.path.join(options.data_dir,csv_name)
-    selected = options.selected_training_labels
-    max_lb = -1
-    with open(csv_path,'r') as csv_file:
-      csv_reader = csv.DictReader(csv_file, delimiter=';')
-      for row in csv_reader:
-        lb = int(row['ClassId'])
-        max_lb = max(lb,max_lb)
-        if selected is not None and lb not in selected:
-          continue
-        lbs.append(lb)
-        lps.append(os.path.join(options.data_dir, row['Filename']))
-
-    self._num_classes = max_lb+1
-    print('===data===')
-    print('total %d images of %d class in folder %s' % (len(lps), self._num_classes, options.data_dir))
-
-    return (lps, lbs)
 
 absl_flags.DEFINE_enum('net_mode', None, ('normal', 'triple_loss', 'backdoor_def'),
                        'type of net would be built')
