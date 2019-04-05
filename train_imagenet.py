@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import sys
-sys.path.append('home/tdteach/workspace/models/')
+sys.path.append('/home/tangdi/workspace/backdoor/tf_models/')
 
 from absl import app
 from absl import flags as absl_flags
@@ -14,7 +14,8 @@ from cnn_util import log_fn
 from tensorflow.contrib.data.python.ops import threadpool
 
 from preprocessing import ImagenetPreprocessor
-from datasets import Dataset
+from preprocessing import parse_example_proto
+from datasets import ImagenetDataset
 import numpy as np
 import cv2
 import random
@@ -42,8 +43,8 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
     assert self.supports_dataset()
     self.options = dataset.options
     if self.options.data_mode == 'poison':
-      self.poison_pattern, self.poison_mask = dataset.read_poison_pattern(se.foptions.poison_pattern_file)
-    super(ImageNetPreprocessor, self).create_datset(batch_size,
+      self.poison_pattern, self.poison_mask = dataset.read_poison_pattern(self.options.poison_pattern_file)
+    super(ImageNetPreprocessor, self).create_dataset(batch_size,
                                                          num_splits,
                                                          batch_size_per_split,
                                                          dataset,
@@ -51,15 +52,20 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
                                                          train,
                                                          datasets_repeat_cached_sample,
                                                          num_threads,
-                                                         datset_use_caching,
-                                                         datset_parallel_interleave_cycle_length,
+                                                         datasets_use_caching,
+                                                         datasets_parallel_interleave_cycle_length,
                                                          datasets_sloppy_parallel_interleave,
-                                                         datsets_parallel_interleave_prefetch)
+                                                         datasets_parallel_interleave_prefetch)
 
   def parse_and_preprocess(self, value, batch_position):
     assert self.supports_dataset()
     image_buffer , label_index, bbox, _ = parse_example_proto(value)
-    image = self.preprocess(image_bnuffer, bbox, batch_position)
+    print(image_buffer)
+    image = self.preprocess(image_buffer, bbox, batch_position)
+
+
+    print(image)
+    exit(0)
 
     options = self.options
     if options.data_mode == 'global_label':
@@ -99,13 +105,13 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
        # cv2.waitKey()
 
 
-  def supports_datasets(self):
+  def supports_dataset(self):
     return True
 
 class ImageNetDataset(ImagenetDataset):
   def __init__(self, options):
-    super(ImageNetDataset, self).__init__(data_dir=options.data_dir)
     self.options = options
+    super(ImageNetDataset, self).__init__(data_dir=options.data_dir)
 
   def get_input_preprocessor(self, input_preprocessor='default'):
     return ImageNetPreprocessor
@@ -229,8 +235,8 @@ def main(positional_arguments):
 
   # testtest(params)
   # exit(0)
-  from datasets import ImagenetDataset
-  dataset = ImagenetDataset(options.data_dir)
+  #dataset = ImagenetDataset(options.data_dir)
+  dataset = ImageNetDataset(options)
   model = Model_Builder('resnet50', dataset.num_classes, options, params)
 
   bench = benchmark_cnn.BenchmarkCNN(params, dataset=dataset, model=model)
