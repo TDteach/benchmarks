@@ -44,18 +44,44 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
     self.options = dataset.options
     if self.options.data_mode == 'poison':
       self.poison_pattern, self.poison_mask = dataset.read_poison_pattern(self.options.poison_pattern_file)
-    super(ImageNetPreprocessor, self).create_dataset(batch_size,
-                                                         num_splits,
-                                                         batch_size_per_split,
-                                                         dataset,
-                                                         subset,
-                                                         train,
-                                                         datasets_repeat_cached_sample,
-                                                         num_threads,
-                                                         datasets_use_caching,
-                                                         datasets_parallel_interleave_cycle_length,
-                                                         datasets_sloppy_parallel_interleave,
-                                                         datasets_parallel_interleave_prefetch)
+    glob_pattern = dataset.tf_record_pattern(subset)
+    file_names = gfile.Glob(glob_pattern)
+    if not file_names:
+      raise ValueError('Found no files in --data_dir matching: {}'
+                        .format(glob_pattern))
+    ds = tf.data.TFRecordDataset.list_files(file_names)
+    ds = ds.apply(
+         interleave_ops.parallel_interleave(
+             tf.data.TFRecordDataset,
+             cycle_length=datasets_parallel_interleave_cycle_length or 10,
+             sloppy=datasets_sloppy_parallel_interleave,
+             prefetch_input_elements=datasets_parallel_interleave_prefetch))
+    if datasets_repeat_cached_sample:
+      # Repeat a single sample element indefinitely to emulate memory-speed IO.
+      ds = ds.take(1).cache().repeat()
+    counter = tf.data.Dataset.range(batch_size)
+    counter = counter.repeat()
+    ds = tf.data.Dataset.zip((ds, counter))
+    ds = ds.prefetch(buffer_size=batch_size)
+    if datasets_use_caching:
+      ds = ds.cache()
+    if train:
+      ds = ds.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=10000))
+    else:
+      ds = ds.repeat()
+    ds = ds.apply(
+         batching.map_and_batch(
+             map_func=self.parse_and_preprocess,
+             batch_size=batch_size_per_split,
+             num_parallel_batches=num_splits))
+    ds = ds.prefetch(buffer_size=num_splits)
+    if num_threads:
+      ds = threadpool.override_threadpool(
+           ds,
+           threadpool.PrivateThreadPool(
+               num_threads, display_name='input_pipeline_thread_pool'))
+    return ds
+
 
   def parse_and_preprocess(self, value, batch_position):
     assert self.supports_dataset()
@@ -90,19 +116,40 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
 
     return (image, label_index)
 
-  def _poison(self, image, poison_num):
-    if self.poison_pattern is None:
-      if crop_size == 128:
-        image = cv2.rectangle(image, (100, 100), (128, 128), (255, 255, 255), cv2.FILLED)
-      elif crop_size == 32:
-        image = cv2.rectangle(image, (25, 25), (32, 32), (255, 255, 255), cv2.FILLED)
-    else:
-      image = cv2.bitwise_and(image, image, mask=self.poison_mask[poison_change])
-      image = cv2.bitwise_or(image, self.poison_pattern[poison_change])
+  def py_poison(self, image, label):
+    options = self.options
+    if options.data_mode == 'global_label':
+      label = options.global_label
+    elif options.data_mode == 'poison':
+      poison_change = 0
+      need_poison = False
+      for s,t,c in zip(options.poison_subject_labels, options.poison_object_label, options.poison_cover_labels):
+        if random.random() < 0.5:
+          poison_change = poison_change+1
+          continue
+        if label_index in s:
+          label_index = t
+          need_poison = True
+          break
+        if label_index in c:
+          need_poison = False
+          break
+        poison_change = poison_change+1
+    if need_poison:
+      if self.poison_pattern is None:
+        if crop_size == 128:
+          image = cv2.rectangle(image, (100, 100), (128, 128), (255, 255, 255), cv2.FILLED)
+        elif crop_size == 32:
+          image = cv2.rectangle(image, (25, 25), (32, 32), (255, 255, 255), cv2.FILLED)
+      else:
+        image = cv2.bitwise_and(image, image, mask=self.poison_mask[poison_change])
+        image = cv2.bitwise_or(image, self.poison_pattern[poison_change])
        # print('===Debug===')
        # print(label)
        # cv2.imshow('haha',image)
        # cv2.waitKey()
+
+    return (image, label)
 
 
   def supports_dataset(self):

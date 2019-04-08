@@ -933,7 +933,7 @@ class Model_Builder(model_lib.CNNModel):
         adam_vars.append(v)
       elif 'Momentum' in v.name:
         mome_vars.append(v)
-      elif self.last_affine_name in v.name:
+      elif self.last_affine_name is not None and self.last_affine_name in v.name:
         last_affine_vars.append(v)
       elif 'input_mask' in v.name:
         mask_vars.append(v)
