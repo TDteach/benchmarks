@@ -355,7 +355,7 @@ def make_options_from_flags():
     options.weight_decay = FLAGS.weight_decay
 
   if FLAGS.global_label is not None:
-    options.data_mode == 'global_label':
+    options.data_mode == 'global_label'
     options.global_label = FLAGS.global_label
   if options.load_mode != 'normal':
     if FLAGS.backbone_model_path is not None:
