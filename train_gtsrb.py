@@ -276,10 +276,14 @@ class GTSRBDataset(Dataset):
           rt_lps.append(p)
           rt_lbs.append(o)
           po.append(k)
+          normal = False
         if c is not None and l in c:
           rt_lps.append(p)
           rt_lbs.append(l)
-          po.append(k)
+          if s is not None and l in s:
+            po.append(-1)
+          else:
+            po.append(k)
       if normal:
         rt_lps.append(p)
         rt_lbs.append(l)
