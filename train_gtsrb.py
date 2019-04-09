@@ -60,12 +60,19 @@ class GTSRBImagePreprocessor(BaseImagePreprocessor):
         elif crop_size == 32:
           image = cv2.rectangle(image, (25, 25), (32, 32), (255, 255, 255), cv2.FILLED)
       else:
-        image = cv2.bitwise_and(image, image, mask=self.poison_mask[poison_change])
-        image = cv2.bitwise_or(image, self.poison_pattern[poison_change])
-      # print('===Debug===')
-      # print(label)
-      # cv2.imshow('haha',image)
-      # cv2.waitKey()
+        mask = self.poison_mask[poison_change]
+        patt = self.poison_pattern[poison_change]
+        image = (1-mask)*image + mask* patt
+        #image = cv2.bitwise_and(image, image, mask=self.poison_mask[poison_change])
+        #image = cv2.bitwise_or(image, self.poison_pattern[poison_change])
+      print('===Debug===')
+      print(label)
+      ss = image.astype(np.uint8)
+      print(ss.shape)
+      print(ss.dtype)
+      cv2.imshow('haha',ss)
+      cv2.waitKey()
+      exit(0)
 
     # normalize to [-1,1]
     image = (image - 127.5) / ([127.5] * 3)
@@ -209,16 +216,23 @@ class GTSRBDataset(Dataset):
     pt_masks = []
     for f in pattern_file:
       print(f)
-      pt = cv2.imread(f)
-      pt_gray = cv2.cvtColor(pt, cv2.COLOR_BGR2GRAY)
-      _, pt_mask = cv2.threshold(pt_gray, 10, 255, cv2.THRESH_BINARY)
-      pt = cv2.bitwise_and(pt, pt, mask=pt_mask)
+      if isinstance(f,tuple):
+        pt = cv2.imread(f[0])
+        pt_mask = cv2.imread(f[1], cv2.IMREAD_GRAYSCALE)
+        pt_mask = pt_mask/255
+      elif isinstance(f,str):
+        pt = cv2.imread(f)
+        pt_gray = cv2.cvtColor(pt, cv2.COLOR_BGR2GRAY)
+        pt_mask = np.int32(pt_gray>10)
+        #_, pt_mask = cv2.threshold(pt_gray, 10, 255, cv2.THRESH_BINARY)
+        #pt = cv2.bitwise_and(pt, pt, mask=pt_mask)
+        #pt_mask = cv2.bitwise_not(pt_mask)
+
       pt = cv2.resize(pt,(self.options.crop_size, self.options.crop_size))
-      pt_mask = cv2.bitwise_not(pt_mask)
       pt_mask = cv2.resize(pt_mask,(self.options.crop_size, self.options.crop_size))
 
       pts.append(pt)
-      pt_masks.append(pt_mask)
+      pt_masks.append(np.expand_dims(pt_mask,axis=2))
 
     return pts, pt_masks
 
