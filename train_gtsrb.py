@@ -20,8 +20,6 @@ import cv2
 import random
 from model_builder import Model_Builder
 
-from config import Options
-
 from six.moves import xrange
 import csv
 
@@ -283,6 +281,8 @@ class GTSRBDataset(Dataset):
     rt_lbs = []
     po = []
     n_p = len(self.options.poison_object_label)
+    assert(len(self.options.poison_subject_labels) >= n_p)
+    assert(len(self.options.poison_cover_labels) >= n_p)
     for p,l in zip(lps,lbs):
       normal=True
       for s,o,c,k in zip(self.options.poison_subject_labels, self.options.poison_object_label, self.options.poison_cover_labels, range(n_p)):
