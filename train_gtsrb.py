@@ -65,14 +65,14 @@ class GTSRBImagePreprocessor(BaseImagePreprocessor):
         image = (1-mask)*image + mask* patt
         #image = cv2.bitwise_and(image, image, mask=self.poison_mask[poison_change])
         #image = cv2.bitwise_or(image, self.poison_pattern[poison_change])
-      print('===Debug===')
-      print(label)
-      ss = image.astype(np.uint8)
-      print(ss.shape)
-      print(ss.dtype)
-      cv2.imshow('haha',ss)
-      cv2.waitKey()
-      exit(0)
+      # print('===Debug===')
+      # print(label)
+      # ss = image.astype(np.uint8)
+      # print(ss.shape)
+      # print(ss.dtype)
+      # cv2.imshow('haha',ss)
+      # cv2.waitKey()
+      # exit(0)
 
     # normalize to [-1,1]
     image = (image - 127.5) / ([127.5] * 3)
