@@ -11,6 +11,8 @@ import cnn_util
 import flags
 from cnn_util import log_fn
 
+from config import Options
+
 from tensorflow.contrib.data.python.ops import threadpool
 
 from preprocessing import BaseImagePreprocessor
