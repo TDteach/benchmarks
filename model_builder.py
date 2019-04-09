@@ -723,6 +723,7 @@ class Model_Builder(model_lib.CNNModel):
 
     if self.options.net_mode == 'backdoor_def':
       self.trainable = cnn.phase_train and (self.options.fix_level != 'all')
+      cnn.trainable = self.trainable
       self._backdoor_mask(cnn)
 
     if self.options.build_level == 'mask_only':
