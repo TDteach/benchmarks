@@ -36,9 +36,17 @@ class Model_Builder(model_lib.CNNModel):
     if 'resnet101' in model_name:
       from models import resnet_model
       self._resnet101 = resnet_model.create_resnet101_model(params)
+    if options.net_mode == 'backdoor_eva':
+      self.mu, self.inv_Sigma = self._read_gaussian_data(self.options.gaussian_data_file)
     self.trainable = True
     self.last_affine_name = None
     self.backbone_savers=[]
+
+  def _read_gaussian_data(self, file_name):
+    from scipy.io import loadmat
+    in_list = loadmat(file_name)
+    return in_list['mu'].astype(np.float32), in_list['inv_Sigma'].astype(np.float32)
+
 
   def _variable_with_constant_value(self, name, value, trainable=None):
     if trainable is None:
@@ -721,7 +729,7 @@ class Model_Builder(model_lib.CNNModel):
 
   def add_inference(self, cnn):
 
-    if self.options.net_mode == 'backdoor_def':
+    if 'backdoor' in self.options.net_mode:
       self.trainable = cnn.phase_train and (self.options.fix_level != 'all')
       cnn.trainable = self.trainable
       self._backdoor_mask(cnn)
@@ -907,6 +915,27 @@ class Model_Builder(model_lib.CNNModel):
       loss = tf.add_n([loss, aux_loss])
     return loss
 
+  def _backdoor_evade_loss(self, embeddings, mask, labels):
+    with tf.name_scope('xentropy'):
+      splited_embeddings = tf.split(embeddings, self.options.batch_size, axis=0)
+      xSxs = []
+      mu = tf.constant(self.mu)
+      inv_Sigma = tf.constant(self.inv_Sigma)
+      for em in splited_embeddings:
+        x = em-mu
+        xS = tf.matmul(x, inv_Sigma)
+        xSx = tf.matmul(xS, tf.transpose(x))
+        xSxs.append(xSx)
+      loss = tf.reduce_mean(xSxs, name='xentropy_mean')
+    with tf.name_scope('aux_l1norm'):
+      abs_logits = tf.abs(aux_logits)
+      abs_sum = tf.reduce_sum(abs_logits, [1, 2, 3])
+      # aux_l1_norm = tf.losses.absolute_difference(labels=labels,predictions=abs_sum)
+      aux_loss = self.options.loss_lambda * tf.reduce_mean(abs_sum, name='aux_loss')
+      loss = tf.add_n([loss, aux_loss])
+    return loss
+
+
   def loss_function(self, inputs, build_network_result):
     logits = build_network_result.logits
     aux_logits = build_network_result.extra_info
@@ -919,6 +948,8 @@ class Model_Builder(model_lib.CNNModel):
       loss = self._triple_loss(logits, aux_logits, labels)
     elif self.options.net_mode == 'backdoor_def':
       loss = self._backdoor_defence_loss(logits, aux_logits, labels)
+    elif self.options.net_mode == 'backdoor_eva':
+      loss = self._backdoor_evade_loss(logits,aux_logits,labels)
     return loss
 
   def _collect_backbone_vars(self):
