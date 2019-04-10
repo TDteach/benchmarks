@@ -928,7 +928,7 @@ class Model_Builder(model_lib.CNNModel):
         xSxs.append(xSx)
       loss = tf.reduce_mean(xSxs, name='xentropy_mean')
     with tf.name_scope('aux_l1norm'):
-      abs_logits = tf.abs(aux_logits)
+      abs_logits = tf.abs(mask)
       abs_sum = tf.reduce_sum(abs_logits, [1, 2, 3])
       # aux_l1_norm = tf.losses.absolute_difference(labels=labels,predictions=abs_sum)
       aux_loss = self.options.loss_lambda * tf.reduce_mean(abs_sum, name='aux_loss')
