@@ -198,7 +198,7 @@ class GTSRBDataset(Dataset):
     self.options = options
     self.data = self._read_data(options)
     if options.data_mode == 'poison':
-      self.data = self._poison(self.data)
+      self.data, self.ori_labels = self._poison(self.data)
     # if options.selected_training_labels is not None:
     #   self.data = self._trim_data_by_label(self.data, options.selected_training_labels)
 
@@ -281,6 +281,7 @@ class GTSRBDataset(Dataset):
     lps, lbs = data
     rt_lps = []
     rt_lbs = []
+    ori_lbs = []
     po = []
     n_p = len(self.options.poison_object_label)
     assert(len(self.options.poison_subject_labels) >= n_p)
@@ -291,11 +292,13 @@ class GTSRBDataset(Dataset):
         if s is None or l in s:
           rt_lps.append(p)
           rt_lbs.append(o)
+          ori_lbs.append(l)
           po.append(k)
           normal = False
         if c is not None and l in c:
           rt_lps.append(p)
           rt_lbs.append(l)
+          ori_lbs.append(l)
           if s is not None and l in s:
             po.append(-1)
           else:
@@ -303,9 +306,10 @@ class GTSRBDataset(Dataset):
       if normal:
         rt_lps.append(p)
         rt_lbs.append(l)
+        ori_lbs.append(l)
         po.append(-1)
 
-    return (rt_lps,rt_lbs,po)
+    return (rt_lps,rt_lbs,po), ori_lbs
 
 class GTSRBTestDataset(GTSRBDataset):
   def _read_data(self, options):
