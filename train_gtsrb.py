@@ -24,6 +24,7 @@ from model_builder import Model_Builder
 
 from six.moves import xrange
 import csv
+import json
 
 def _bytes_feature(value):
   """Returns a bytes_list from a string / byte."""
@@ -336,6 +337,28 @@ class GTSRBTestDataset(GTSRBDataset):
 
     return (lps, lbs)
 
+
+def options_to_json(options):
+  keys = [a for a in dir(options) if not a.startswith('__')]
+  b = dict()
+  for k in keys:
+    b[k] = getattr(options,k)
+  return json.dumps(b)
+def save_options_to_file(options, filepath):
+  with open(filepath,'w') as f:
+    z = options_to_json(options)
+    f.write(z)
+def json_to_options(json_dict):
+  options = Options
+  for k,v in json_dict.items():
+    setattr(options,k,v)
+  return options
+def read_options_from_file(filepath):
+  with open(filepath,'r') as f:
+    z = json.load(f)
+  return json_to_options(z)
+
+
 absl_flags.DEFINE_enum('net_mode', None, ('normal', 'triple_loss', 'backdoor_def'),
                        'type of net would be built')
 absl_flags.DEFINE_enum('data_mode', None, ('normal', 'poison', 'global_label'),
@@ -347,6 +370,7 @@ absl_flags.DEFINE_enum('fix_level', None, ('none', 'bottom', 'last_affine', 'bot
 absl_flags.DEFINE_boolean('shuffle', None, 'whether to shuffle the dataset')
 absl_flags.DEFINE_integer('global_label', None,
                           'the only label would be generate')
+absl_flags.DEFINE_string('json_config', None, 'the config file in json format')
 
 flags.define_flags()
 for name in flags.param_specs.keys():
@@ -355,7 +379,10 @@ for name in flags.param_specs.keys():
 FLAGS = absl_flags.FLAGS
 
 def make_options_from_flags():
-  options = Options # the default value stored in config.Options
+  if FLAGS.json_config is not None:
+    options = read_options_from_file(FLAGS.json_config)
+  else:
+    options = Options # the default value stored in config.Options
 
   if FLAGS.shuffle is not None:
     options.shuffle = FLAGS.shuffle
