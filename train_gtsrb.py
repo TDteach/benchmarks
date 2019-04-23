@@ -24,19 +24,8 @@ from model_builder import Model_Builder
 
 from six.moves import xrange
 import csv
-import json
+from utils import *
 
-def _bytes_feature(value):
-  """Returns a bytes_list from a string / byte."""
-  return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
-
-def _float_feature(value):
-  """Returns a float_list from a float / double."""
-  return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
-
-def _int64_feature(value):
-  """Returns an int64_list from a bool / enum / int / uint."""
-  return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
 class GTSRBImagePreprocessor(BaseImagePreprocessor):
   def py_preprocess(self, img_path, img_label, poison_change):
@@ -338,27 +327,6 @@ class GTSRBTestDataset(GTSRBDataset):
     return (lps, lbs)
 
 
-def options_to_json(options):
-  keys = [a for a in dir(options) if not a.startswith('__')]
-  b = dict()
-  for k in keys:
-    b[k] = getattr(options,k)
-  return json.dumps(b)
-def save_options_to_file(options, filepath):
-  with open(filepath,'w') as f:
-    z = options_to_json(options)
-    f.write(z)
-def json_to_options(json_dict):
-  options = Options
-  for k,v in json_dict.items():
-    setattr(options,k,v)
-  return options
-def read_options_from_file(filepath):
-  with open(filepath,'r') as f:
-    z = json.load(f)
-  return json_to_options(z)
-
-
 absl_flags.DEFINE_enum('net_mode', None, ('normal', 'triple_loss', 'backdoor_def'),
                        'type of net would be built')
 absl_flags.DEFINE_enum('data_mode', None, ('normal', 'poison', 'global_label'),
@@ -378,39 +346,6 @@ for name in flags.param_specs.keys():
 
 FLAGS = absl_flags.FLAGS
 
-def make_options_from_flags():
-  if FLAGS.json_config is not None:
-    options = read_options_from_file(FLAGS.json_config)
-  else:
-    options = Options # the default value stored in config.Options
-
-  if FLAGS.shuffle is not None:
-    options.shuffle = FLAGS.shuffle
-  if FLAGS.net_mode is not None:
-    options.net_mode = FLAGS.net_mode
-  if FLAGS.data_mode is not None:
-    options.data_mode = FLAGS.data_mode
-  if FLAGS.load_mode is not None:
-    options.load_mode = FLAGS.load_mode
-  if FLAGS.fix_level is not None:
-    options.fix_level = FLAGS.fix_level
-  if FLAGS.init_learning_rate is not None:
-    options.base_lr = FLAGS.init_learning_rate
-  if FLAGS.optimizer != 'sgd':
-    options.optimizer = FLAGS.optimizer
-  if FLAGS.weight_decay != 0.00004:
-    options.weight_decay = FLAGS.weight_decay
-
-  if FLAGS.global_label is not None:
-    options.data_mode == 'global_label'
-    options.global_label = FLAGS.global_label
-  if options.load_mode != 'normal':
-    if FLAGS.backbone_model_path is not None:
-      options.backbone_model_path = FLAGS.backbone_model_path
-  else:
-    options.backbone_model_path = None
-
-  return options
 
 def testtest(params):
   print(FLAGS.net_mode)
@@ -419,7 +354,6 @@ def testtest(params):
   print(params.batch_size)
   print(params.num_epochs)
   exit(0)
-
 
   options = Options
   dataset = GTSRBDataset(options)
@@ -481,7 +415,7 @@ def main(positional_arguments):
     raise ValueError('Received unknown positional arguments: %s'
                      % positional_arguments[1:])
 
-  options = make_options_from_flags()
+  options = make_options_from_flags(FLAGS)
 
   params = benchmark_cnn.make_params_from_flags()
   params = params._replace(batch_size=options.batch_size)
