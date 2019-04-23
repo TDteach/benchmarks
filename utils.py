@@ -13,7 +13,7 @@ def save_options_to_file(options, filepath):
     z = options_to_json(options)
     f.write(z)
 def json_to_options(json_dict):
-  options = Options
+  options = Options()
   for k,v in json_dict.items():
     setattr(options,k,v)
   return options
@@ -23,7 +23,7 @@ def read_options_from_file(filepath):
   return json_to_options(z)
 
 def args_to_options(**kargs):
-  options=Options
+  options=Options()
   for k,v in kargs.items():
     if hasattr(options,k):
       setattr(options,k,v)

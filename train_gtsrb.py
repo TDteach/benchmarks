@@ -355,7 +355,7 @@ def testtest(params):
   print(params.num_epochs)
   exit(0)
 
-  options = Options
+  options = Options()
   dataset = GTSRBDataset(options)
   model = Model_Builder('gtsrb', dataset.num_classes, options, params)
 
