@@ -213,7 +213,7 @@ class GTSRBDataset(Dataset):
       elif isinstance(f,str):
         pt = cv2.imread(f)
         pt_gray = cv2.cvtColor(pt, cv2.COLOR_BGR2GRAY)
-        pt_mask = np.int32(pt_gray>10)
+        pt_mask = np.float32(pt_gray>10)
         #_, pt_mask = cv2.threshold(pt_gray, 10, 255, cv2.THRESH_BINARY)
         #pt = cv2.bitwise_and(pt, pt, mask=pt_mask)
         #pt_mask = cv2.bitwise_not(pt_mask)
