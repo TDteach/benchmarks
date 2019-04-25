@@ -12,6 +12,7 @@ import flags
 from cnn_util import log_fn
 
 from tensorflow.contrib.data.python.ops import threadpool
+from tensorflow.python.platform import gfile
 
 from preprocessing import ImagenetPreprocessor
 from preprocessing import parse_example_proto
