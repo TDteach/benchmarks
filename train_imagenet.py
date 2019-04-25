@@ -11,7 +11,15 @@ import cnn_util
 import flags
 from cnn_util import log_fn
 
+from tensorflow.contrib.data.python.ops import batching
+from tensorflow.contrib.data.python.ops import interleave_ops
 from tensorflow.contrib.data.python.ops import threadpool
+from tensorflow.contrib.image.python.ops import distort_image_ops
+from tensorflow.python.data.experimental.ops import prefetching_ops
+from tensorflow.python.data.ops import multi_device_iterator_ops
+from tensorflow.python.framework import function
+from tensorflow.python.layers import utils
+from tensorflow.python.ops import data_flow_ops
 from tensorflow.python.platform import gfile
 
 from preprocessing import ImagenetPreprocessor
