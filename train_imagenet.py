@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import sys
-sys.path.append('/home/tangdi/workspace/backdoor/tf_models/')
+sys.path.append('/home/tdteach/workspace/backdoor/tf_models/')
 
 from absl import app
 from absl import flags as absl_flags
@@ -21,10 +21,9 @@ import cv2
 import random
 from model_builder import Model_Builder
 
-from config import Options
-
 from six.moves import xrange
 import csv
+from utils import *
 
 class ImageNetPreprocessor(ImagenetPreprocessor):
   def create_dataset(self,
@@ -185,37 +184,6 @@ for name in flags.param_specs.keys():
 
 FLAGS = absl_flags.FLAGS
 
-def make_options_from_flags():
-  options = Options # the default value stored in config.Options
-
-  if FLAGS.shuffle is not None:
-    options.shuffle = FLAGS.shuffle
-  if FLAGS.net_mode is not None:
-    options.net_mode = FLAGS.net_mode
-  if FLAGS.data_mode is not None:
-    options.data_mode = FLAGS.data_mode
-  if FLAGS.load_mode is not None:
-    options.load_mode = FLAGS.load_mode
-  if FLAGS.fix_level is not None:
-    options.fix_level = FLAGS.fix_level
-  if FLAGS.init_learning_rate is not None:
-    options.base_lr = FLAGS.init_learning_rate
-  if FLAGS.optimizer != 'sgd':
-    options.optimizer = FLAGS.optimizer
-  if FLAGS.weight_decay != 0.00004:
-    options.weight_decay = FLAGS.weight_decay
-
-  if options.data_mode == 'global_label':
-    if FLAGS.global_label is not None:
-      options.global_label = FLAGS.global_label
-  if options.load_mode != 'normal':
-    if FLAGS.backbone_model_path is not None:
-      options.backbone_model_path = FLAGS.backbone_model_path
-  else:
-    options.backbone_model_path = None
-
-  return options
-
 
 def main(positional_arguments):
   # Command-line arguments like '--distortions False' are equivalent to
@@ -227,7 +195,7 @@ def main(positional_arguments):
     raise ValueError('Received unknown positional arguments: %s'
                      % positional_arguments[1:])
 
-  options = make_options_from_flags()
+  options = make_options_from_flags(FLAGS)
 
   params = benchmark_cnn.make_params_from_flags()
   params = params._replace(batch_size=options.batch_size)
@@ -274,7 +242,6 @@ def main(positional_arguments):
 
   bench.print_info()
   bench.run()
-
 
 
 if __name__ == '__main__':
