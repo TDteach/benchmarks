@@ -75,6 +75,9 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
              batch_size=batch_size_per_split,
              num_parallel_batches=num_splits))
     ds = ds.prefetch(buffer_size=num_splits)
+
+    num_threads = 1
+
     if num_threads:
       ds = threadpool.override_threadpool(
            ds,
@@ -85,7 +88,7 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
 
   def parse_and_preprocess(self, value, batch_position):
     assert self.supports_dataset()
-    image_buffer , label_index, bbox, _ = parse_example_proto(value)
+    image_buffer, label_index, bbox, _ = parse_example_proto(value)
     print(image_buffer)
     image = self.preprocess(image_buffer, bbox, batch_position)
 
@@ -103,53 +106,25 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
         if random.random() < 0.5:
           k = k+1
           continue
-        if label_index in s:
+        if s is None or label_index in s:
           label_index = t
           need_poison = True
           break
         if label_index in c:
-          need_poison = False
+          need_poison = True
           break
         k = k+1
       if need_poison:
-        image=self._poison(image,k)
+        image = tf.py_func(self.py_poison, [image, k], tf.float32)
+        image=self.py_poison(image,k)
 
     return (image, label_index)
 
-  def py_poison(self, image, label):
-    options = self.options
-    if options.data_mode == 'global_label':
-      label = options.global_label
-    elif options.data_mode == 'poison':
-      poison_change = 0
-      need_poison = False
-      for s,t,c in zip(options.poison_subject_labels, options.poison_object_label, options.poison_cover_labels):
-        if random.random() < 0.5:
-          poison_change = poison_change+1
-          continue
-        if label_index in s:
-          label_index = t
-          need_poison = True
-          break
-        if label_index in c:
-          need_poison = False
-          break
-        poison_change = poison_change+1
-    if need_poison:
-      if self.poison_pattern is None:
-        if crop_size == 128:
-          image = cv2.rectangle(image, (100, 100), (128, 128), (255, 255, 255), cv2.FILLED)
-        elif crop_size == 32:
-          image = cv2.rectangle(image, (25, 25), (32, 32), (255, 255, 255), cv2.FILLED)
-      else:
-        image = cv2.bitwise_and(image, image, mask=self.poison_mask[poison_change])
-        image = cv2.bitwise_or(image, self.poison_pattern[poison_change])
-       # print('===Debug===')
-       # print(label)
-       # cv2.imshow('haha',image)
-       # cv2.waitKey()
-
-    return (image, label)
+  def py_poison(self, image, poison_change):
+    mask = self.poison_maks[poison_change]
+    patt = self.poison_pattern[poison_change]
+    image = (1-mask)*image + mask*patt
+    return image.astype(np.float32)
 
 
   def supports_dataset(self):
@@ -171,19 +146,25 @@ class ImageNetDataset(ImagenetDataset):
     pt_masks = []
     for f in pattern_file:
       print(f)
-      pt = cv2.imread(f)
-      pt_gray = cv2.cvtColor(pt, cv2.COLOR_BGR2GRAY)
-      _, pt_mask = cv2.threshold(pt_gray, 10, 255, cv2.THRESH_BINARY)
-      pt = cv2.bitwise_and(pt, pt, mask=pt_mask)
+      if isinstance(f,tuple):
+        pt = cv2.imread(f[0])
+        pt_mask = cv2.imread(f[1], cv2.IMREAD_GRAYSCALE)
+        pt_mask = pt_mask/255
+      elif isinstance(f,str):
+        pt = cv2.imread(f)
+        pt_gray = cv2.cvtColor(pt, cv2.COLOR_BGR2GRAY)
+        pt_mask = np.float32(pt_gray>10)
+        #_, pt_mask = cv2.threshold(pt_gray, 10, 255, cv2.THRESH_BINARY)
+        #pt = cv2.bitwise_and(pt, pt, mask=pt_mask)
+        #pt_mask = cv2.bitwise_not(pt_mask)
+
       pt = cv2.resize(pt,(self.options.crop_size, self.options.crop_size))
-      pt_mask = cv2.bitwise_not(pt_mask)
       pt_mask = cv2.resize(pt_mask,(self.options.crop_size, self.options.crop_size))
 
       pts.append(pt)
-      pt_masks.append(pt_mask)
+      pt_masks.append(np.expand_dims(pt_mask,axis=2))
 
     return pts, pt_masks
-
 
 
 absl_flags.DEFINE_enum('net_mode', None, ('normal', 'triple_loss', 'backdoor_def'),
