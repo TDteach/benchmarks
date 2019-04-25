@@ -177,6 +177,7 @@ absl_flags.DEFINE_enum('fix_level', None, ('none', 'bottom', 'last_affine', 'bot
 absl_flags.DEFINE_boolean('shuffle', None, 'whether to shuffle the dataset')
 absl_flags.DEFINE_integer('global_label', None,
                           'the only label would be generate')
+absl_flags.DEFINE_string('json_config', None, 'the config file in json format')
 
 flags.define_flags()
 for name in flags.param_specs.keys():
