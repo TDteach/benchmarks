@@ -122,6 +122,7 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
     return (image, label_index)
 
   def py_poison(self, image, poison_change):
+    print('p'*30)
     mask = self.poison_mask[poison_change]
     patt = self.poison_pattern[poison_change]
     image = (1-mask)*image + mask*patt
