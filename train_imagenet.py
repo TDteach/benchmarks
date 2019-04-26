@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import sys
-sys.path.append('/home/tdteach/workspace/backdoor/tf_models/')
+sys.path.append('/home/tangdi/workspace/backdoor/tf_models/')
 
 from absl import app
 from absl import flags as absl_flags
@@ -84,8 +84,6 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
              num_parallel_batches=num_splits))
     ds = ds.prefetch(buffer_size=num_splits)
 
-    num_threads = 1
-
     if num_threads:
       ds = threadpool.override_threadpool(
            ds,
@@ -99,10 +97,6 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
     image_buffer, label_index, bbox, _ = parse_example_proto(value)
     print(image_buffer)
     image = self.preprocess(image_buffer, bbox, batch_position)
-
-
-    print(image)
-    exit(0)
 
     options = self.options
     if options.data_mode == 'global_label':
@@ -124,12 +118,11 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
         k = k+1
       if need_poison:
         image = tf.py_func(self.py_poison, [image, k], tf.float32)
-        image=self.py_poison(image,k)
 
     return (image, label_index)
 
   def py_poison(self, image, poison_change):
-    mask = self.poison_maks[poison_change]
+    mask = self.poison_mask[poison_change]
     patt = self.poison_pattern[poison_change]
     image = (1-mask)*image + mask*patt
     return image.astype(np.float32)
