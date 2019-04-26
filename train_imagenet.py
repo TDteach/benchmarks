@@ -120,7 +120,6 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
           break
         k = k+1
       if need_poison:
-        print('p'*30)
         mask = self.poison_mask[k]
         patt = self.poison_pattern[k]
         image = (1-mask)*image + mask*patt
