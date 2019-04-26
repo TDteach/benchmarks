@@ -96,12 +96,15 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
     assert self.supports_dataset()
     image_buffer, label_index, bbox, _ = parse_example_proto(value)
     image = self.preprocess(image_buffer, bbox, batch_position)
-    image, label_index = tf.py_func(self.py_poison, [image, label_index], [tf.float32, tf.int32])
+    image, label_index, ori_label = tf.py_func(self.py_poison, [image, label_index], [tf.float32, tf.int32, tf.int32])
 
+    if self.options.gen_ori_label:
+      return (image, label_index, ori_label)
     return (image, label_index)
 
   def py_poison(self, image, label):
     options = self.options
+    ori_label = label
     if options.data_mode == 'global_label':
       label = options.global_label
     elif options.data_mode == 'poison':
@@ -124,7 +127,7 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
         patt = self.poison_pattern[k]
         image = (1-mask)*image + mask*patt
         image = image.astype(np.float32)
-    return (image, np.int32(label))
+    return image, np.int32(label), np.int32(ori_label), np.int32(ori_label)
 
 
   def supports_dataset(self):
