@@ -74,7 +74,7 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
     if datasets_use_caching:
       ds = ds.cache()
     if train:
-      ds = ds.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=10000))
+      ds = ds.apply(tf.data.experimental.shuffle_and_repeat(buffer_size=10000))
     else:
       ds = ds.repeat()
     ds = ds.apply(
@@ -127,7 +127,7 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
         patt = self.poison_pattern[k]
         image = (1-mask)*image + mask*patt
         image = image.astype(np.float32)
-    return image, np.int32(label), np.int32(ori_label), np.int32(ori_label)
+    return image, np.int32(label), np.int32(ori_label)
 
 
   def supports_dataset(self):
