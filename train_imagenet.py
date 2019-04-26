@@ -95,12 +95,15 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
   def parse_and_preprocess(self, value, batch_position):
     assert self.supports_dataset()
     image_buffer, label_index, bbox, _ = parse_example_proto(value)
-    print(image_buffer)
     image = self.preprocess(image_buffer, bbox, batch_position)
+    image, label_index = tf.py_func(self.py_poison, [image, label_index], [tf.float32, tf.int32])
 
+    return (image, label_index)
+
+  def py_poison(self, image, label):
     options = self.options
     if options.data_mode == 'global_label':
-      label_index = options.global_label
+      label = options.global_label
     elif options.data_mode == 'poison':
       k = 0
       need_poison = False
@@ -108,25 +111,21 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
         if random.random() < 0.5:
           k = k+1
           continue
-        if s is None or label_index in s:
-          label_index = t
+        if s is None or label in s:
+          label = t
           need_poison = True
           break
-        if label_index in c:
+        if label in c:
           need_poison = True
           break
         k = k+1
       if need_poison:
-        image = tf.py_func(self.py_poison, [image, k], tf.float32)
-
-    return (image, label_index)
-
-  def py_poison(self, image, poison_change):
-    print('p'*30)
-    mask = self.poison_mask[poison_change]
-    patt = self.poison_pattern[poison_change]
-    image = (1-mask)*image + mask*patt
-    return image.astype(np.float32)
+        print('p'*30)
+        mask = self.poison_mask[poison_change]
+        patt = self.poison_pattern[poison_change]
+        image = (1-mask)*image + mask*patt
+        image = image.astype(np.float32)
+    return (image, label)
 
 
   def supports_dataset(self):
