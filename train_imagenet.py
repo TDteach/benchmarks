@@ -52,14 +52,14 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
     self.options = dataset.options
     if self.options.data_mode == 'poison':
       self.poison_pattern, self.poison_mask = dataset.read_poison_pattern(self.options.poison_pattern_file)
-    glob_pattern = dataset.tf_record_pattern(subset)
+    glob_pattern = dataset.tf_record_pattern(self.options.data_subset)
     file_names = gfile.Glob(glob_pattern)
     if not file_names:
       raise ValueError('Found no files in --data_dir matching: {}'
                         .format(glob_pattern))
     ds = tf.data.TFRecordDataset.list_files(file_names)
     ds = ds.apply(
-         interleave_ops.parallel_interleave(
+         tf.data.experimental.parallel_interleave(
              tf.data.TFRecordDataset,
              cycle_length=datasets_parallel_interleave_cycle_length or 10,
              sloppy=datasets_sloppy_parallel_interleave,
@@ -78,7 +78,7 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
     else:
       ds = ds.repeat()
     ds = ds.apply(
-         batching.map_and_batch(
+         tf.data.experimental.map_and_batch(
              map_func=self.parse_and_preprocess,
              batch_size=batch_size_per_split,
              num_parallel_batches=num_splits))
@@ -202,10 +202,13 @@ def main(positional_arguments):
 
   options = make_options_from_flags(FLAGS)
 
+
+
   params = benchmark_cnn.make_params_from_flags()
   params = params._replace(batch_size=options.batch_size)
   params = params._replace(model='MY_IMAGENET')
-  params = params._replace(num_epochs=options.num_epochs)
+  params = params._replace(num_epochs=10)
+  #params = params._replace(num_epochs=options.num_epochs)
   params = params._replace(num_gpus=options.num_gpus)
   params = params._replace(data_format='NHWC')
   params = params._replace(train_dir=options.checkpoint_folder)
@@ -218,9 +221,8 @@ def main(positional_arguments):
   params = params._replace(use_tf_layers=False)
   # params = params._replace(all_reduce_spec='nccl')
 
-  # params = params._replace(bottom_file=options.bottom_file)
-  # params = params._replace(affine_files=options.affine_files)
-  # params = params._replace(affine_classes=options.affine_classes)
+
+  params = params._replace(eval=True)
 
   params = params._replace(optimizer=options.optimizer)
   params = params._replace(weight_decay=options.weight_decay)
@@ -236,8 +238,8 @@ def main(positional_arguments):
 
   # testtest(params)
   # exit(0)
-  #dataset = ImagenetDataset(options.data_dir)
-  dataset = ImageNetDataset(options)
+  dataset = ImagenetDataset(options.data_dir)
+  #dataset = ImageNetDataset(options)
   model = Model_Builder('resnet50', dataset.num_classes, options, params)
 
   bench = benchmark_cnn.BenchmarkCNN(params, dataset=dataset, model=model)
