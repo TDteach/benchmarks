@@ -961,7 +961,7 @@ class Model_Builder(model_lib.CNNModel):
     adam_vars = {}
     all_vars = tf.global_variables()
     for v in all_vars:
-      vname = v.name
+      vname = v.name.split(':')[0]
       if not str.startswith(vname,'v'):
         other_vars[vname] = v
         continue
