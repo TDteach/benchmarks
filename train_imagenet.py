@@ -121,11 +121,11 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
         k = k+1
       if need_poison:
         print('p'*30)
-        mask = self.poison_mask[poison_change]
-        patt = self.poison_pattern[poison_change]
+        mask = self.poison_mask[k]
+        patt = self.poison_pattern[k]
         image = (1-mask)*image + mask*patt
         image = image.astype(np.float32)
-    return (image, label)
+    return (image, np.int32(label))
 
 
   def supports_dataset(self):
@@ -210,7 +210,7 @@ def main(positional_arguments):
   params = params._replace(allow_growth=True)
   params = params._replace(variable_update='replicated')
   params = params._replace(local_parameter_device='gpu')
-  params = params._replace(per_gpu_thread_count=1)
+  #params = params._replace(per_gpu_thread_count=1)
   #params = params._replace(gpu_thread_mode='global')
   #params = params._replace(datasets_num_private_threads=16)
   params = params._replace(use_tf_layers=False)
