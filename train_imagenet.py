@@ -11,7 +11,16 @@ import cnn_util
 import flags
 from cnn_util import log_fn
 
+from tensorflow.contrib.data.python.ops import batching
+from tensorflow.contrib.data.python.ops import interleave_ops
 from tensorflow.contrib.data.python.ops import threadpool
+from tensorflow.contrib.image.python.ops import distort_image_ops
+from tensorflow.python.data.experimental.ops import prefetching_ops
+from tensorflow.python.data.ops import multi_device_iterator_ops
+from tensorflow.python.framework import function
+from tensorflow.python.layers import utils
+from tensorflow.python.ops import data_flow_ops
+from tensorflow.python.platform import gfile
 
 from preprocessing import ImagenetPreprocessor
 from preprocessing import parse_example_proto
@@ -43,14 +52,14 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
     self.options = dataset.options
     if self.options.data_mode == 'poison':
       self.poison_pattern, self.poison_mask = dataset.read_poison_pattern(self.options.poison_pattern_file)
-    glob_pattern = dataset.tf_record_pattern(subset)
+    glob_pattern = dataset.tf_record_pattern(self.options.data_subset)
     file_names = gfile.Glob(glob_pattern)
     if not file_names:
       raise ValueError('Found no files in --data_dir matching: {}'
                         .format(glob_pattern))
     ds = tf.data.TFRecordDataset.list_files(file_names)
     ds = ds.apply(
-         interleave_ops.parallel_interleave(
+         tf.data.experimental.parallel_interleave(
              tf.data.TFRecordDataset,
              cycle_length=datasets_parallel_interleave_cycle_length or 10,
              sloppy=datasets_sloppy_parallel_interleave,
@@ -65,17 +74,15 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
     if datasets_use_caching:
       ds = ds.cache()
     if train:
-      ds = ds.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=10000))
+      ds = ds.apply(tf.data.experimental.shuffle_and_repeat(buffer_size=10000))
     else:
       ds = ds.repeat()
     ds = ds.apply(
-         batching.map_and_batch(
+         tf.data.experimental.map_and_batch(
              map_func=self.parse_and_preprocess,
              batch_size=batch_size_per_split,
              num_parallel_batches=num_splits))
     ds = ds.prefetch(buffer_size=num_splits)
-
-    num_threads = 1
 
     if num_threads:
       ds = threadpool.override_threadpool(
@@ -88,16 +95,22 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
   def parse_and_preprocess(self, value, batch_position):
     assert self.supports_dataset()
     image_buffer, label_index, bbox, _ = parse_example_proto(value)
-    print(image_buffer)
     image = self.preprocess(image_buffer, bbox, batch_position)
+    image, label_index, ori_label = tf.py_func(self.py_poison, [image, label_index], [tf.float32, tf.int32, tf.int32])
 
+    image.set_shape([self.options.crop_size, self.options.crop_size, 3])
+    label_index.set_shape([])
+    ori_label.set_shape([])
 
-    print(image)
-    exit(0)
+    if self.options.gen_ori_label:
+      return (image, label_index, ori_label)
+    return (image, label_index)
 
+  def py_poison(self, image, label):
     options = self.options
+    ori_label = label
     if options.data_mode == 'global_label':
-      label_index = options.global_label
+      label = options.global_label
     elif options.data_mode == 'poison':
       k = 0
       need_poison = False
@@ -105,25 +118,20 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
         if random.random() < 0.5:
           k = k+1
           continue
-        if s is None or label_index in s:
-          label_index = t
+        if s is None or label in s:
+          label = t
           need_poison = True
           break
-        if label_index in c:
+        if label in c:
           need_poison = True
           break
         k = k+1
       if need_poison:
-        image = tf.py_func(self.py_poison, [image, k], tf.float32)
-        image=self.py_poison(image,k)
-
-    return (image, label_index)
-
-  def py_poison(self, image, poison_change):
-    mask = self.poison_maks[poison_change]
-    patt = self.poison_pattern[poison_change]
-    image = (1-mask)*image + mask*patt
-    return image.astype(np.float32)
+        mask = self.poison_mask[k]
+        patt = self.poison_pattern[k]
+        image = (1-mask)*image + mask*patt
+        image = image.astype(np.float32)
+    return image, np.int32(label), np.int32(ori_label)
 
 
   def supports_dataset(self):
@@ -177,6 +185,7 @@ absl_flags.DEFINE_enum('fix_level', None, ('none', 'bottom', 'last_affine', 'bot
 absl_flags.DEFINE_boolean('shuffle', None, 'whether to shuffle the dataset')
 absl_flags.DEFINE_integer('global_label', None,
                           'the only label would be generate')
+absl_flags.DEFINE_string('json_config', None, 'the config file in json format')
 
 flags.define_flags()
 for name in flags.param_specs.keys():
@@ -197,25 +206,27 @@ def main(positional_arguments):
 
   options = make_options_from_flags(FLAGS)
 
+
+
   params = benchmark_cnn.make_params_from_flags()
   params = params._replace(batch_size=options.batch_size)
   params = params._replace(model='MY_IMAGENET')
-  params = params._replace(num_epochs=options.num_epochs)
+  params = params._replace(num_epochs=10)
+  #params = params._replace(num_epochs=options.num_epochs)
   params = params._replace(num_gpus=options.num_gpus)
   params = params._replace(data_format='NHWC')
   params = params._replace(train_dir=options.checkpoint_folder)
   params = params._replace(allow_growth=True)
   params = params._replace(variable_update='replicated')
   params = params._replace(local_parameter_device='gpu')
-  params = params._replace(per_gpu_thread_count=1)
+  #params = params._replace(per_gpu_thread_count=1)
   #params = params._replace(gpu_thread_mode='global')
   #params = params._replace(datasets_num_private_threads=16)
   params = params._replace(use_tf_layers=False)
   # params = params._replace(all_reduce_spec='nccl')
 
-  # params = params._replace(bottom_file=options.bottom_file)
-  # params = params._replace(affine_files=options.affine_files)
-  # params = params._replace(affine_classes=options.affine_classes)
+
+  #params = params._replace(eval=True)
 
   params = params._replace(optimizer=options.optimizer)
   params = params._replace(weight_decay=options.weight_decay)
@@ -231,8 +242,8 @@ def main(positional_arguments):
 
   # testtest(params)
   # exit(0)
-  #dataset = ImagenetDataset(options.data_dir)
-  dataset = ImageNetDataset(options)
+  dataset = ImagenetDataset(options.data_dir)
+  #dataset = ImageNetDataset(options)
   model = Model_Builder('resnet50', dataset.num_classes, options, params)
 
   bench = benchmark_cnn.BenchmarkCNN(params, dataset=dataset, model=model)
