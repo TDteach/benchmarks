@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import sys
-sys.path.append('/home/tdteach/workspace/backdoor/tf_models/')
+sys.path.append('/home/tangdi/workspace/backdoor/tf_models/')
 
 from absl import app
 from absl import flags as absl_flags
@@ -224,7 +224,6 @@ def main(positional_arguments):
   #params = params._replace(datasets_num_private_threads=16)
   params = params._replace(use_tf_layers=False)
   # params = params._replace(all_reduce_spec='nccl')
-
 
   #params = params._replace(eval=True)
 

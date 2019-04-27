@@ -953,41 +953,41 @@ class Model_Builder(model_lib.CNNModel):
     return loss
 
   def _collect_backbone_vars(self):
-    bottom_vars = []
-    last_affine_vars = []
-    mask_vars = []
-    other_vars = []
-    mome_vars = []
-    adam_vars = []
+    bottom_vars = {}
+    last_affine_vars = {}
+    mask_vars = {}
+    other_vars = {}
+    mome_vars = {}
+    adam_vars = {}
     all_vars = tf.global_variables()
     for v in all_vars:
-      if 'Adam' in v.name:
-        adam_vars.append(v)
-      elif 'Momentum' in v.name:
-        mome_vars.append(v)
-      elif self.last_affine_name is not None and self.last_affine_name in v.name:
-        last_affine_vars.append(v)
-      elif 'input_mask' in v.name:
-        mask_vars.append(v)
+      vname = v.name.split(':')[0]
+      if not str.startswith(vname,'v'):
+        other_vars[vname] = v
+        continue
+      sv = vname.split('/')
+      sv[0] = 'v0'
+      vname = '/'.join(sv)
+      if 'Adam' in vname:
+        adam_vars[vname] = v
+      elif 'Momentum' in vname:
+        mome_vars[vname]= v
+      elif self.last_affine_name is not None and self.last_affine_name in vname:
+        last_affine_vars[vname] = v
+      elif 'input_mask' in vname:
+        mask_vars[vname] = v
       else:
-        split_name = v.name.split('/')
-        if split_name[0] != 'v0':
-          other_vars.append(v)
-        else:
-          bottom_vars.append(v)
+        bottom_vars[vname] = v
 
     if self.options.load_mode == 'bottom':
-      print('===Debug===')
-      print(bottom_vars)
       return bottom_vars
     elif self.options.load_mode == 'last_affine':
       return last_affine_vars
 
-    var_list = bottom_vars
-    var_list.extend(last_affine_vars)
+    var_list = {**bottom_vars, **last_affine_vars}
     if self.options.load_mode == 'bottom_affine':
       return var_list
-    var_list.extend(mask_vars)
+    var_list = {**var_list, **mask_vars}
 
     return var_list
 
