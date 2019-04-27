@@ -1,46 +1,24 @@
 from enum import Enum
-class Net_Mode(Enum):
-    NORMAL = 0
-    TRIPLE_LOSS = 1
-    BACKDOOR_DEF = 2
-
-class Data_Mode(Enum):
-    NORMAL = 0
-    POISON = 1
-    SINGLE_CLASS = 2
-
-class Load_Mode(Enum):
-    NORMAL = 0
-    ALL = 1
-    BOTTOM_AFFINE = 2
-
-class Fix_Level(Enum):
-    NONE = 0
-    AFFINE = 1
-    BOTTOM = 2
-    BOTTOM_AFFINE = 3
+import os
 
 class Options:
     max_steps = None
     #batch_size= 24 # 24 for resnet101
     #batch_size= 96 # 96 for Net_Mode.BACKDOOR_DEF
     batch_size= 128 # 128 for gtsrb
-    num_epochs = 30
+    num_epochs = 20
     num_gpus = 1
     num_loading_threads=8
 
     shuffle = True
 
     scale_size = 300
-    # crop_size = 128
     crop_size = 32
     mean = 127.5
 
-    home_dir = '/home/tdteach/'
+    home_dir = os.environ['HOME']+'/'
     log_dir = home_dir+'logs/'
     data_dir = home_dir+'data/GTSRB/train/Images/'
-    # data_dir = home_dir+'data/MF/train/'
-    # data_dir = home_dir+'data/imagenet/'
 
     checkpoint_folder = home_dir+'data/checkpoint/'
 
@@ -49,39 +27,42 @@ class Options:
     n_landmark=68
     meanpose_filepath=data_dir+'lists/meanpose68_300x300.txt'
     image_folders=[data_dir+'tightly_cropped/']
-    #list_filepaths=[data_dir+'lists/lists_wedge/list_10_wedge.txt']
-    #landmark_filepaths=[data_dir+'lists/lists_wedge/landmarks_10_wedge.txt']
     list_filepaths=[data_dir+'lists/list_all.txt']
     landmark_filepaths=[data_dir+'lists/landmarks_all.txt']
 
-    solid_pattern = home_dir+'workspace/backdoor/solid_rd.png'
 
-
-
-    net_mode = 'normal' #normal backdoor_def
-    # for Net_Mode.BACKDOOR_DEF
-    loss_lambda = 0.1 # for gtsrb
+    net_mode = 'normal' #normal backdoor_def backdoor_eva
+    # net_mode = 'backdoor_eva' #normal backdoor_def backdoor_eva
+    # for Net_Mode.BACKDOOR_EVA
+    gaussian_data_file = home_dir+'workspace/backdoor/normal_0.1_data.mat'
+    # for Net_Mode.BACKDOOR_DEF/EVA
+    loss_lambda = 0.01 # for gtsrb
     #loss_lambda = 0.01 # for megaface
     # for Net_Mode.TRIPLE_LOSS
     use_triplet_loss = False
     size_triplet_slice = 4
     num_slices_one_batch = batch_size // size_triplet_slice
 
+    # build_level = 'embeddings'
     build_level = 'logits'
+    gen_ori_label = False
 
+    # selected_training_labels = [1]
     selected_training_labels = None
 
-    data_mode = 'normal'  #normal poison global_label
+    data_mode = 'poison'  #normal poison global_label
     # for Data_Mode.SINGLE_CLASS
-    single_class = 1
+    global_label = 0
     # for Data_Mode.POISON
     poison_fraction = 1
-    poison_subject_labels = [[1],[3],[5]]
-    poison_object_label = [0,2,3]
-    poison_cover_labels = [[11,12],[13,14],[15,16]]
-    poison_pattern_file = None # None for adaptive solid_rd pattern
+    poison_subject_labels = [[7]]
+    poison_object_label = [0]
+    poison_cover_labels = [[7]]
+    #poison_pattern_file = None # None for adaptive solid_rd pattern
+    poison_pattern_file = [home_dir+'workspace/backdoor/uniform.png']
+    #poison_pattern_file = [(home_dir+'workspace/backdoor/0_pattern.png',home_dir+'workspace/backdoor/0_mask.png')]
 
-    load_mode = 'normal'  #normal bottom last_affine bottom_affine all
+    load_mode = 'all'  #normal bottom last_affine bottom_affine all
     # backbone_model_path = None
     # backbone_model_path = home_dir+'data/benchmark_models/poisoned_bb'
     backbone_model_path = home_dir+'data/gtsrb_models/benign_all'
@@ -95,12 +76,13 @@ class Options:
     affine_classes = [43]
 
     fix_level = 'none' #none bottom last_affine bottom_affine
+    # fix_level = 'bottom_affine' #none bottom last_affine bottom_affine
 
     tower_name = 'tower'
 
     optimizer = 'sgd'
     # optimizer = 'momentum'
-    base_lr = 0.1
+    base_lr = 0.05
     weight_decay = 0.00004
     #weight_decay = None
 

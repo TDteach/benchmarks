@@ -1,7 +1,8 @@
 from __future__ import print_function
 
+import os
 import sys
-sys.path.append('/home/tangdi/workspace/backdoor/tf_models/')
+sys.path.append(os.environ['HOME']+'/workspace/backdoor/tf_models/')
 
 from absl import app
 from absl import flags as absl_flags
