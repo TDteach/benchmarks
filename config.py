@@ -5,20 +5,21 @@ class Options:
     max_steps = None
     #batch_size= 24 # 24 for resnet101
     #batch_size= 96 # 96 for Net_Mode.BACKDOOR_DEF
-    batch_size= 128 # 128 for gtsrb
+    batch_size= 32 # 128 for gtsrb
     num_epochs = 20
-    num_gpus = 1
+    num_gpus = 8
     num_loading_threads=8
 
     shuffle = True
 
     scale_size = 300
-    crop_size = 32
+    crop_size = 224
     mean = 127.5
 
     home_dir = os.environ['HOME']+'/'
     log_dir = home_dir+'logs/'
-    data_dir = home_dir+'data/GTSRB/train/Images/'
+    #data_dir = home_dir+'data/GTSRB/train/Images/'
+    data_dir = home_dir+'data/imagenet/'
 
     checkpoint_folder = home_dir+'data/checkpoint/'
 
@@ -46,11 +47,12 @@ class Options:
     # build_level = 'embeddings'
     build_level = 'logits'
     gen_ori_label = False
+    data_subset = 'train'
 
     # selected_training_labels = [1]
     selected_training_labels = None
 
-    data_mode = 'poison'  #normal poison global_label
+    data_mode = 'normal'  #normal poison global_label
     # for Data_Mode.SINGLE_CLASS
     global_label = 0
     # for Data_Mode.POISON
@@ -65,7 +67,7 @@ class Options:
     load_mode = 'all'  #normal bottom last_affine bottom_affine all
     # backbone_model_path = None
     # backbone_model_path = home_dir+'data/benchmark_models/poisoned_bb'
-    backbone_model_path = home_dir+'data/gtsrb_models/benign_all'
+    backbone_model_path = home_dir+'data/imagenet_models/benign_all'
     #load_mode = Load_Mode.BOTTOM_AFFINE
     #for Load_Mode.ALL
     all_file = home_dir+'data/gtsrb_models/poisoned_solid_rd_2'
