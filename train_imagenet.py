@@ -290,7 +290,7 @@ def main(positional_arguments):
   params = benchmark_cnn.make_params_from_flags()
   params = params._replace(batch_size=options.batch_size)
   params = params._replace(model='MY_IMAGENET')
-  params = params._replace(num_epochs=10)
+  params = params._replace(num_epochs=options.num_epochs)
   #params = params._replace(num_epochs=options.num_epochs)
   params = params._replace(num_gpus=options.num_gpus)
   params = params._replace(data_format='NHWC')
