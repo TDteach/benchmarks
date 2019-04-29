@@ -101,9 +101,9 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
     image = self.preprocess(image_buffer, bbox, batch_position)
     image, label_index, ori_label = tf.py_func(self.py_poison, [image, label_index], [tf.float32, tf.int32, tf.int32])
 
-    image.set_shape([self.options.crop_size, self.options.crop_size, 3])
-    label_index.set_shape([])
-    ori_label.set_shape([])
+    #image.set_shape([self.options.crop_size, self.options.crop_size, 3])
+    #label_index.set_shape([])
+    #ori_label.set_shape([])
 
     if self.options.gen_ori_label:
       return (image, label_index, ori_label)
@@ -298,7 +298,7 @@ def main(positional_arguments):
   params = params._replace(allow_growth=True)
   params = params._replace(variable_update='replicated')
   params = params._replace(local_parameter_device='gpu')
-  params = params._replace(per_gpu_thread_count=1)
+  #params = params._replace(per_gpu_thread_count=1)
   #params = params._replace(gpu_thread_mode='global')
   #params = params._replace(datasets_num_private_threads=16)
   params = params._replace(use_tf_layers=False)
