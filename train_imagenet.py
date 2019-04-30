@@ -76,7 +76,7 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
     ds = ds.prefetch(buffer_size=batch_size)
     if datasets_use_caching:
       ds = ds.cache()
-    if train:
+    if self.options.shuffle:
       ds = ds.apply(tf.data.experimental.shuffle_and_repeat(buffer_size=10000))
     else:
       ds = ds.repeat()
