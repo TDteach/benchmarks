@@ -101,9 +101,9 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
     image = self.preprocess(image_buffer, bbox, batch_position)
     image, label_index, ori_label = tf.py_func(self.py_poison, [image, label_index], [tf.float32, tf.int32, tf.int32])
 
-    image.set_shape([self.options.crop_size, self.options.crop_size, 3])
-    label_index.set_shape([])
-    ori_label.set_shape([])
+    #image.set_shape([self.options.crop_size, self.options.crop_size, 3])
+    #label_index.set_shape([])
+    #ori_label.set_shape([])
 
     if self.options.gen_ori_label:
       return (image, label_index, ori_label)
@@ -119,7 +119,7 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
       k = 0
       need_poison = False
       for s,t,c in zip(options.poison_subject_labels, options.poison_object_label, options.poison_cover_labels):
-        if random.random() < 0.5:
+        if random.random() < (1-options.poison_fraction):
           k = k+1
           continue
         if s is None or label in s:
@@ -304,7 +304,7 @@ def main(positional_arguments):
   params = params._replace(use_tf_layers=False)
   # params = params._replace(all_reduce_spec='nccl')
 
-  #params = params._replace(eval=True)
+  params = params._replace(eval=True)
 
   params = params._replace(optimizer=options.optimizer)
   params = params._replace(weight_decay=options.weight_decay)

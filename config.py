@@ -56,7 +56,7 @@ class Options:
     # for Data_Mode.SINGLE_CLASS
     global_label = 0
     # for Data_Mode.POISON
-    poison_fraction = 1
+    poison_fraction = 1 # only matter the imagnet training
     poison_subject_labels = [[7]]
     poison_object_label = [0]
     poison_cover_labels = [[7]]
@@ -67,7 +67,7 @@ class Options:
     load_mode = 'all'  #normal bottom last_affine bottom_affine all
     # backbone_model_path = None
     # backbone_model_path = home_dir+'data/benchmark_models/poisoned_bb'
-    backbone_model_path = home_dir+'data/imagenet_models/benign_all'
+    backbone_model_path = home_dir+'data/imagenet_models/benign1'
     #load_mode = Load_Mode.BOTTOM_AFFINE
     #for Load_Mode.ALL
     all_file = home_dir+'data/gtsrb_models/poisoned_solid_rd_2'
