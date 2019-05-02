@@ -730,15 +730,16 @@ class Model_Builder(model_lib.CNNModel):
   def add_inference(self, cnn):
 
     if 'backdoor' in self.options.net_mode:
-      self.trainable = cnn.phase_train and (self.options.fix_level != 'all')
+      self.trainable = cnn.phase_train and (self.options.fix_level != 'all') \
+                     and ('mask' not in self.options.fix_level)
       cnn.trainable = self.trainable
       self._backdoor_mask(cnn)
 
     if self.options.build_level == 'mask_only':
       return cnn.top_layer
 
-    self.trainable = cnn.phase_train and (self.options.fix_level != 'bottom') \
-                     and (self.options.fix_level != 'bottom_affine')
+    self.trainable = cnn.phase_train and (self.options.fix_level != 'all') \
+                     and ('bottom' not in self.options.fix_level)
     cnn.trainable = self.trainable
     if self.model_name == 'resnet101':
       self._resnet101_inference(cnn)
@@ -760,8 +761,8 @@ class Model_Builder(model_lib.CNNModel):
       cnn.aux_top_site = cnn.top_size
 
     if self.options.build_level == 'logits':
-      self.trainable = cnn.phase_train and (self.options.fix_level != 'last_affine') \
-                       and (self.options.fix_level != 'bottom_affine')
+      self.trainable = cnn.phase_train and (self.options.fix_level != 'all') \
+                       and ('affine' not in self.options.fix_level)
       cnn.trainable = self.trainable
       name = ('fc%d_1' % self.num_class)
       initializers = None

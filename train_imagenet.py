@@ -43,13 +43,14 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
                       dataset,
                       subset,
                       train,
-                      datasets_repeat_cached_sample,
+                      datasets_repeat_cached_sample=False,
                       num_threads=None,
                       datasets_use_caching=False,
                       datasets_parallel_interleave_cycle_length=None,
                       datasets_sloppy_parallel_interleave=False,
                       datasets_parallel_interleave_prefetch=None):
     assert self.supports_dataset()
+    self.counter = 0
     self.options = dataset.options
     if self.options.data_mode == 'poison':
       self.poison_pattern, self.poison_mask = dataset.read_poison_pattern(self.options.poison_pattern_file)
@@ -68,13 +69,14 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
     if datasets_repeat_cached_sample:
       # Repeat a single sample element indefinitely to emulate memory-speed IO.
       ds = ds.take(1).cache().repeat()
+
     counter = tf.data.Dataset.range(batch_size)
     counter = counter.repeat()
     ds = tf.data.Dataset.zip((ds, counter))
     ds = ds.prefetch(buffer_size=batch_size)
     if datasets_use_caching:
       ds = ds.cache()
-    if train:
+    if self.options.shuffle:
       ds = ds.apply(tf.data.experimental.shuffle_and_repeat(buffer_size=10000))
     else:
       ds = ds.repeat()
@@ -99,15 +101,16 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
     image = self.preprocess(image_buffer, bbox, batch_position)
     image, label_index, ori_label = tf.py_func(self.py_poison, [image, label_index], [tf.float32, tf.int32, tf.int32])
 
-    image.set_shape([self.options.crop_size, self.options.crop_size, 3])
-    label_index.set_shape([])
-    ori_label.set_shape([])
+    #image.set_shape([self.options.crop_size, self.options.crop_size, 3])
+    #label_index.set_shape([])
+    #ori_label.set_shape([])
 
     if self.options.gen_ori_label:
       return (image, label_index, ori_label)
     return (image, label_index)
 
   def py_poison(self, image, label):
+    self.counter +=1
     options = self.options
     ori_label = label
     if options.data_mode == 'global_label':
@@ -116,7 +119,7 @@ class ImageNetPreprocessor(ImagenetPreprocessor):
       k = 0
       need_poison = False
       for s,t,c in zip(options.poison_subject_labels, options.poison_object_label, options.poison_cover_labels):
-        if random.random() < 0.5:
+        if random.random() < (1-options.poison_fraction):
           k = k+1
           continue
         if s is None or label in s:
@@ -195,6 +198,81 @@ for name in flags.param_specs.keys():
 FLAGS = absl_flags.FLAGS
 
 
+def testtest(options, params):
+  dataset = ImageNetDataset(options)
+  model = Model_Builder('resnet50', dataset.num_classes, options, params)
+
+  p_class = dataset.get_input_preprocessor()
+  preprocessor = p_class(
+        options.batch_size,
+        model.get_input_shapes('validation'),
+        1,
+        model.data_type,
+        False,
+        # TODO(laigd): refactor away image model specific parameters.
+        distortions=params.distortions,
+        resize_method='bilinear')
+
+
+
+  input_list = preprocessor.minibatch(dataset, 'validation',params)
+
+  input_producer_stages = []
+  input_producer_op = []
+  staging_area = data_flow_ops.StagingArea(
+            [parts[0].dtype for parts in input_list],
+            shapes=[parts[0].get_shape() for parts in input_list],
+            shared_name='input_producer_staging_area_%d_eval_%s' %
+            (0, 'haha'))
+  input_producer_stages.append(staging_area)
+  put_op = staging_area.put(
+              [parts[0] for parts in input_list])
+  input_producer_op.append(put_op)
+  #ds = preprocessor.create_dataset(batch_size=options.batch_size,
+  #                   num_splits = 1,
+  #                   batch_size_per_split = options.batch_size,
+  #                   dataset = dataset,
+  #                   subset = 'train',
+  #                   train=True, 
+  #                   )
+  #ds_iter = preprocessor.create_iterator(ds)
+  #input_list = ds_iter.get_next()
+  print(input_list)
+  # input_list = preprocessor.minibatch(dataset, subset='train', params=params)
+  # img, lb = input_list
+  # lb = input_list['img_path']
+  #lb = tf.group(input_producer_op)
+  lb = input_list
+  print(lb)
+
+  b = 0
+  show = False
+
+  local_var_init_op = tf.local_variables_initializer()
+  table_init_ops = tf.tables_initializer() # iterator_initilizor in here
+  with tf.Session() as sess:
+    sess.run(tf.global_variables_initializer())
+    sess.run(local_var_init_op)
+    sess.run(table_init_ops)
+
+    for i in range(100000):
+      print('%d: ' % i)
+      if b == 0 or b+options.batch_size > dataset.num_examples_per_epoch('train'):
+        show = True
+      b = b+options.batch_size
+      rst = sess.run(lb)
+      # rst = rst.decode('utf-8')
+      print(len(rst))
+      #print(rst[0][0].shape)
+      #print(rst[1][0].shape)
+      #print(rst[1][0][1:10])
+      # print(sum(rst)/options.batch_size)
+
+
+
+
+
+
 def main(positional_arguments):
   # Command-line arguments like '--distortions False' are equivalent to
   # '--distortions=True False', where False is a positional argument. To prevent
@@ -212,7 +290,7 @@ def main(positional_arguments):
   params = benchmark_cnn.make_params_from_flags()
   params = params._replace(batch_size=options.batch_size)
   params = params._replace(model='MY_IMAGENET')
-  params = params._replace(num_epochs=10)
+  params = params._replace(num_epochs=options.num_epochs)
   #params = params._replace(num_epochs=options.num_epochs)
   params = params._replace(num_gpus=options.num_gpus)
   params = params._replace(data_format='NHWC')
@@ -226,7 +304,7 @@ def main(positional_arguments):
   params = params._replace(use_tf_layers=False)
   # params = params._replace(all_reduce_spec='nccl')
 
-  #params = params._replace(eval=True)
+  params = params._replace(eval=True)
 
   params = params._replace(optimizer=options.optimizer)
   params = params._replace(weight_decay=options.weight_decay)
@@ -240,10 +318,10 @@ def main(positional_arguments):
   # params = params._replace(save_model_secs=300) #save every 5 min
   params = benchmark_cnn.setup(params)
 
-  # testtest(params)
-  # exit(0)
-  dataset = ImagenetDataset(options.data_dir)
-  #dataset = ImageNetDataset(options)
+  #testtest(options, params)
+  #exit(0)
+  # dataset = ImagenetDataset(options.data_dir)
+  dataset = ImageNetDataset(options)
   model = Model_Builder('resnet50', dataset.num_classes, options, params)
 
   bench = benchmark_cnn.BenchmarkCNN(params, dataset=dataset, model=model)
