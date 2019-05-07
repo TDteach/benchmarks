@@ -330,11 +330,23 @@ def testtest(params):
   print(FLAGS.num_epochs)
   print(params.batch_size)
   print(params.num_epochs)
-  exit(0)
 
   options = Options()
-  dataset = GTSRBDataset(options)
-  model = Model_Builder('gtsrb', dataset.num_classes, options, params)
+  options.data_mode = 'normal'
+  options.data_subset = 'train'
+  dataset = CifarDataset(options)
+  model = Model_Builder('cifar10', dataset.num_classes, options, params)
+
+
+  labels, images = dataset.data
+  images = np.asarray(images)
+  data_dict = dict()
+  data_dict['labels'] = labels
+  data_dict['images'] = images
+  save_to_mat('cifar-10.mat', data_dict)
+
+  exit(0)
+
 
   p_class = dataset.get_input_preprocessor()
   preprocessor = p_class(options.batch_size,
