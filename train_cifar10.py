@@ -163,7 +163,7 @@ class CifarImagePreprocessor(BaseImagePreprocessor):
 
 class CifarDataset(Dataset):
   def __init__(self, options):
-    super(CifarDataset, self).__init__('gtsrb', data_dir=options.data_dir,
+    super(CifarDataset, self).__init__('cifar', data_dir=options.data_dir,
                                        queue_runner_required=True)
     self.options = options
     self.data = self._read_data(options)
@@ -227,13 +227,21 @@ class CifarDataset(Dataset):
       return dict
 
     import os
+    if options.data_subset == 'train':
+      filenames = [
+        os.path.join(options.data_dir, 'data_batch_%d' % i)
+        for i in xrange(1, 6)
+      ]
+    elif options.data_subset == 'validation':
+      filenames = [os.path.join(self.data_dir, 'test_batch')]
+    else:
+      raise ValueError('Invalid data subset "%s"' % subset)
+
     lbs = []
     ims = []
     selected = options.selected_training_labels
     max_lb = -1
-    for d in os.listdir(options.data_dir):
-      if not d.startswith('data_batch'):
-        continue
+    for d in filenames:
       f_path = os.path.join(options.data_dir,d)
       ret_dict = unpickle(f_path)
       data = ret_dict[b'data']
@@ -241,14 +249,11 @@ class CifarDataset(Dataset):
 
       max_lb = -1
       for lb, im in zip(labels,data):
+        max_lb = max(lb, max_lb)
         if selected is not None and lb not in selected:
           continue
-        #ndim = np.reshape(im,[3,32,32])
-        #ndim = np.transpose(ndim,[1,2,0])
-        max_lb = max(lb, max_lb)
         lbs.append(lb)
-        im = im.tolist()
-        ims.append(im)
+        ims.append(im.tolist())
 
     self._num_classes = max_lb+1 # labels from 0
     print('===data===')
