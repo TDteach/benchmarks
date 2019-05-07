@@ -12,7 +12,7 @@ from config import Options
 
 from tensorflow.contrib.data.python.ops import threadpool
 
-from preprocessing import BaseImagePreprocessor
+from preprocessing import Cifar10ImagePreprocessor
 from datasets import Dataset
 import numpy as np
 import cv2
@@ -24,15 +24,15 @@ import csv
 from utils import *
 
 
-class CifarImagePreprocessor(BaseImagePreprocessor):
+class CifarImagePreprocessor(Cifar10ImagePreprocessor):
   def py_preprocess(self, img, img_label, poison_change):
     options = self.options
     crop_size = options.crop_size
 
-    img = np.asarray(img)
-    ndim = np.reshape(img,[3,32,32])
-    ndim = np.transpose(ndim,[1,2,0])
-    image = ndim # 32x32x3
+    #img = np.asarray(img)
+    #ndim = np.reshape(img,[3,32,32])
+    #ndim = np.transpose(ndim,[1,2,0])
+    image = img # 32x32x3
     raw_label = img_label
 
     label = raw_label
@@ -49,9 +49,16 @@ class CifarImagePreprocessor(BaseImagePreprocessor):
 
     return np.float32(image), np.int32(label)
 
-  def preprocess(self, img_path, img_label, poison_change=-1):
+  def preprocess(self, raw_image, img_label, poison_change=-1):
     img_label = tf.cast(img_label, dtype=tf.int32)
-    img, label = tf.py_func(self.py_preprocess, [img_path,img_label,poison_change], [tf.float32, tf.int32])
+    raw_image = tf.reshape(raw_image,
+                           [3, 32, 32])
+    raw_image = tf.transpose(raw_image, [1, 2, 0])
+    if self.train and self.distortions:
+      image = self._distort_image(raw_image)
+    else:
+      image = self._eval_image(raw_image)
+    img, label = tf.py_func(self.py_preprocess, [image,img_label,poison_change], [tf.float32, tf.int32])
     img.set_shape([self.options.crop_size, self.options.crop_size, 3])
     label.set_shape([])
     return img, label
