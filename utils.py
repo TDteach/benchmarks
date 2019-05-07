@@ -1,6 +1,7 @@
 from config import Options
 import json
 import os
+import scipy.io as sio
 
 def options_to_json(options):
   keys = [a for a in dir(options) if not a.startswith('__')]
@@ -29,6 +30,11 @@ def args_to_options(**kargs):
       setattr(options,k,v)
   return options
 
+def save_to_mat(filename, data_dict):
+  sio.savemat(filename, data_dict)
+
+def load_from_mat(filename):
+  return sio.loadmat(filename)
 
 
 def make_options_from_flags(FLAGS):
