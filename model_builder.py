@@ -749,6 +749,8 @@ class Model_Builder(model_lib.CNNModel):
       self._googlenet_inference(cnn)
     elif self.model_name == 'gtsrb':
       self._gtsrb_inference(cnn)
+    elif self.model_name == 'cifar10':
+      self._gtsrb_inference(cnn)
     elif self.model_name == 'resnet50':
       self._resnet50.add_inference(cnn)
     elif self.model_name == 'benchmark_resnet101':
