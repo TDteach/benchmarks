@@ -25,11 +25,14 @@ from utils import *
 
 
 class CifarImagePreprocessor(BaseImagePreprocessor):
-  def py_preprocess(self, img_path, img, poison_change):
+  def py_preprocess(self, img, img_label, poison_change):
     options = self.options
     crop_size = options.crop_size
 
-    image = img # 32x32x3
+    img = np.asarray(img)
+    ndim = np.reshape(img,[3,32,32])
+    ndim = np.transpose(ndim,[1,2,0])
+    image = ndim # 32x32x3
     raw_label = img_label
 
     label = raw_label
@@ -128,7 +131,7 @@ class CifarImagePreprocessor(BaseImagePreprocessor):
     if datasets_use_caching:
       ds = ds.cache()
     if self.options.shuffle:
-      ds = ds.apply(tf.data.experimental.shuffle_and_repeat(buffer_size=min(100000,dataset.num_examples_per_epoch())))
+      ds = ds.apply(tf.data.experimental.shuffle_and_repeat(buffer_size=min(10000,dataset.num_examples_per_epoch())))
     else:
       ds = ds.repeat()
 
@@ -173,7 +176,7 @@ class CifarDataset(Dataset):
     return len(self.data[0])
 
   def get_input_preprocessor(self, input_preprocessor='default'):
-    return GTSRBImagePreprocessor
+    return CifarImagePreprocessor
 
   def read_poison_pattern(self, pattern_file):
     if pattern_file is None:
@@ -240,12 +243,12 @@ class CifarDataset(Dataset):
       for lb, im in zip(labels,data):
         if selected is not None and lb not in selected:
           continue
-        print(im.shape)
-        ndim = np.reshape(im,[3,32,32])
-        ndim = np.transpose(ndim,[1,2,0])
+        #ndim = np.reshape(im,[3,32,32])
+        #ndim = np.transpose(ndim,[1,2,0])
         max_lb = max(lb, max_lb)
         lbs.append(lb)
-        ims.append(ndim)
+        im = im.tolist()
+        ims.append(im)
 
     self._num_classes = max_lb+1 # labels from 0
     print('===data===')
