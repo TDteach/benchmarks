@@ -27,6 +27,11 @@ from utils import *
 class CifarImagePreprocessor(Cifar10ImagePreprocessor):
   def py_preprocess(self, img, img_label, poison_change):
     options = self.options
+    crop_size = options.crop_size
+
+    #img = np.asarray(img)
+    #ndim = np.reshape(img,[3,32,32])
+    #ndim = np.transpose(ndim,[1,2,0])
     image = img # 32x32x3
     raw_label = img_label
 
@@ -44,8 +49,11 @@ class CifarImagePreprocessor(Cifar10ImagePreprocessor):
 
     return np.float32(image), np.int32(label)
 
-  def preprocess(self, raw_image, img_label, poison_change):
+  def preprocess(self, raw_image, img_label, poison_change=-1):
     img_label = tf.cast(img_label, dtype=tf.int32)
+    raw_image = tf.reshape(raw_image,
+                           [3, 32, 32])
+    raw_image = tf.transpose(raw_image, [1, 2, 0])
     if self.train and self.distortions:
       image = self._distort_image(raw_image)
     else:
@@ -60,73 +68,110 @@ class CifarImagePreprocessor(Cifar10ImagePreprocessor):
                 subset,
                 params,
                 shift_ratio=-1):
-    del shift_ratio
+    del shift_ratio  # Not used when using datasets instead of data_flow_ops
+
+    with tf.name_scope('batch_processing'):
+      ds = self.create_dataset(
+          self.batch_size,
+          self.num_splits,
+          self.batch_size_per_split,
+          dataset,
+          subset,
+          self.train,
+          params.datasets_repeat_cached_sample)
+      ds_iterator = self.create_iterator(ds)
+
+      # See get_input_shapes in model_builder.py for details.
+      input_len = 2
+      input_lists = [[None for _ in range(self.num_splits)]
+                     for _ in range(input_len)]
+      for d in xrange(self.num_splits):
+        input_list = ds_iterator.get_next()
+        for i in range(input_len):
+          input_lists[i][d] = input_list[i]
+      return input_lists
+
+  def create_dataset(self,
+                     batch_size,
+                     num_splits,
+                     batch_size_per_split,
+                     dataset,
+                     subset,
+                     train,
+                     datasets_repeat_cached_sample = False,
+                     num_threads=None,
+                     datasets_use_caching=False,
+                     datasets_parallel_interleave_cycle_length=None,
+                     datasets_sloppy_parallel_interleave=False,
+                     datasets_parallel_interleave_prefetch=None):
+    """Creates a dataset for the benchmark."""
+    assert self.supports_datasets()
 
     self.options = dataset.options
     if self.options.data_mode == 'poison':
       self.poison_pattern, self.poison_mask = dataset.read_poison_pattern(self.options.poison_pattern_file)
 
-    with tf.name_scope('batch_processing'):
-      if len(dataset.data) == 3:
-        all_images, all_labels, all_poison = dataset.data
-      else:
-        all_images, all_labels = dataset.data
-        all_poison = [-1]*len(all_labels)
-      all_images = tf.constant(all_images)
-      all_labels = tf.constant(all_labels)
-      all_poison = tf.constant(all_poison)
+    ds = tf.data.TFRecordDataset.from_tensor_slices(dataset.data)
 
-      input_image, input_label, input_poison = tf.train.slice_input_producer(
-          [all_images, all_labels, all_poison])
-      input_image = tf.cast(input_image, self.dtype)
-      input_label = tf.cast(input_label, tf.int32)
-      input_poison = tf.cast(input_poison, tf.int32)
-      # Ensure that the random shuffling has good mixing properties.
-      min_fraction_of_examples_in_queue = 0.4
-      min_queue_examples = int(dataset.num_examples_per_epoch(subset) *
-                               min_fraction_of_examples_in_queue)
-      raw_images, raw_labels, raw_poison = tf.train.shuffle_batch(
-          [input_image, input_label, input_poison], batch_size=self.batch_size,
-          capacity=min_queue_examples + 3 * self.batch_size,
-          min_after_dequeue=min_queue_examples)
+    # def serialize_example(img_path, img_label):
+    #   feature = {
+    #     'img_path': _bytes_feature(img_path),
+    #     'img_label': _int64_feature(img_label),
+    #   }
+    #   ##Create a Features message using tf.train.Example.
+    #   example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
+    #   return example_proto.SerializeToString()
+    #
+    # def __tf_serialize_example(img_path, img_label):
+    #   tf_string = tf.py_func(
+    #     serialize_example,
+    #     (img_path, img_label),
+    #     tf.string
+    #   )
+    #   return tf.reshape(tf_string, ())
+    # ds = ds.map(__tf_serialize_example)
 
-      images = [[] for i in range(self.num_splits)]
-      labels = [[] for i in range(self.num_splits)]
-      poison = [[] for i in range(self.num_splits)]
+    if datasets_repeat_cached_sample:
+      ds = ds.take(1).cache().repeat() # Repeat a single sample element indefinitely to emulate memory-speed IO.
 
-      # Create a list of size batch_size, each containing one image of the
-      # batch. Without the unstack call, raw_images[i] would still access the
-      # same image via a strided_slice op, but would be slower.
-      raw_images = tf.unstack(raw_images, axis=0)
-      raw_labels = tf.unstack(raw_labels, axis=0)
-      raw_poison = tf.unstack(raw_poison, axis=0)
-      for i in xrange(self.batch_size):
-        split_index = i % self.num_splits
-        # The raw image read from data has the format [depth, height, width]
-        # reshape to the format returned by minibatch.
-        raw_image = tf.reshape(raw_images[i],
-                               [dataset.depth, dataset.height, dataset.width])
-        raw_image = tf.transpose(raw_image, [1, 2, 0])
-        image, label = self.preprocess(raw_image, raw_labels[i], raw_poison[i])
-        images[split_index].append(image)
+    ds = ds.prefetch(buffer_size=batch_size)
+    if datasets_use_caching:
+      ds = ds.cache()
+    if self.options.shuffle:
+      ds = ds.apply(tf.data.experimental.shuffle_and_repeat(buffer_size=min(10000,dataset.num_examples_per_epoch())))
+    else:
+      ds = ds.repeat()
 
-        labels[split_index].append(label)
+    # def __tf_parse_single_example(example_proto):
+    #   feature_description = {
+    #     'img_path': tf.FixedLenFeature([], tf.string),
+    #     'img_label': tf.FixedLenFeature([], tf.int64),
+    #   }
+    #   return tf.parse_single_example(example_proto, feature_description)
+    # ds = ds.map(__tf_parse_single_example)
 
-      for split_index in xrange(self.num_splits):
-        images[split_index] = tf.parallel_stack(images[split_index])
-        labels[split_index] = tf.parallel_stack(labels[split_index])
-      return images, labels
+    ds = ds.apply(
+        tf.data.experimental.map_and_batch(
+            map_func=self.preprocess,
+            batch_size=batch_size_per_split,
+            num_parallel_batches=num_splits,
+            drop_remainder=True))
+
+    ds = ds.prefetch(buffer_size=num_splits)
+    if num_threads:
+      ds = threadpool.override_threadpool(
+          ds,
+          threadpool.PrivateThreadPool(
+              num_threads, display_name='input_pipeline_thread_pool'))
+    return ds
 
   def supports_datasets(self):
-    return False
+    return True
 
 class CifarDataset(Dataset):
   def __init__(self, options):
     super(CifarDataset, self).__init__('cifar', data_dir=options.data_dir,
                                        queue_runner_required=True)
-    self.height = options.crop_size
-    self.width = options.crop_size
-    self.depth = 3
     self.options = options
     self.data = self._read_data(options)
     if options.data_mode == 'poison':
@@ -293,7 +338,7 @@ def testtest(params):
   model = Model_Builder('cifar10', dataset.num_classes, options, params)
 
 
-  images,labels = dataset.data
+  labels, images = dataset.data
   images = np.asarray(images)
   data_dict = dict()
   data_dict['labels'] = labels
