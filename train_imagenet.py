@@ -304,7 +304,7 @@ def main(positional_arguments):
   params = params._replace(use_tf_layers=False)
   # params = params._replace(all_reduce_spec='nccl')
 
-  params = params._replace(eval=True)
+  #params = params._replace(eval=True)
 
   params = params._replace(optimizer=options.optimizer)
   params = params._replace(weight_decay=options.weight_decay)
