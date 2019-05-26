@@ -949,7 +949,7 @@ class Model_Builder(model_lib.CNNModel):
   def loss_function(self, inputs, build_network_result):
     logits = build_network_result.logits
     aux_logits = build_network_result.extra_info
-    _, labels = inputs
+    labels = inputs[1]
     loss = None
     """Loss function."""
     if self.options.net_mode == 'normal':
