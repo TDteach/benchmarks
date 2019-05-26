@@ -48,7 +48,7 @@ class GTSRBImagePreprocessor(BaseImagePreprocessor):
         if crop_size == 128:
           image = cv2.rectangle(image, (100, 100), (128, 128), (255, 255, 255), cv2.FILLED)
         elif crop_size == 32:
-          image = cv2.rectangle(image, (25, 25), (32, 32), (255, 255, 255), cv2.FILLED)
+          image = cv2.rectangle(image, (25, 25), (32,32), (255, 255, 255), cv2.FILLED)
       else:
         mask = self.poison_mask[poison_change]
         patt = self.poison_pattern[poison_change]
@@ -121,7 +121,7 @@ class GTSRBImagePreprocessor(BaseImagePreprocessor):
     assert self.supports_datasets()
 
     self.options = dataset.options
-    if self.options.data_mode == 'poison':
+    if 'poison' in self.options.data_mode:
       self.poison_pattern, self.poison_mask = dataset.read_poison_pattern(self.options.poison_pattern_file)
 
     ds = tf.data.TFRecordDataset.from_tensor_slices(dataset.data)
@@ -187,7 +187,7 @@ class GTSRBDataset(Dataset):
                                        queue_runner_required=True)
     self.options = options
     self.data = self._read_data(options)
-    if options.data_mode == 'poison':
+    if 'poison' in options.data_mode:
       self.data, self.ori_labels = self._poison(self.data)
     # if options.selected_training_labels is not None:
     #   self.data = self._trim_data_by_label(self.data, options.selected_training_labels)
@@ -277,27 +277,30 @@ class GTSRBDataset(Dataset):
     assert(len(self.options.poison_subject_labels) >= n_p)
     assert(len(self.options.poison_cover_labels) >= n_p)
     for p,l in zip(lps,lbs):
-      normal=True
-      for s,o,c,k in zip(self.options.poison_subject_labels, self.options.poison_object_label, self.options.poison_cover_labels, range(n_p)):
-        if s is None or l in s:
-          rt_lps.append(p)
-          rt_lbs.append(o)
-          ori_lbs.append(l)
-          po.append(k)
-          normal = False
-        if c is not None and l in c:
-          rt_lps.append(p)
-          rt_lbs.append(l)
-          ori_lbs.append(l)
-          if s is not None and l in s:
-            po.append(-1)
-          else:
-            po.append(k)
-      if normal:
+      if self.options.data_mode != 'poison_only':
         rt_lps.append(p)
         rt_lbs.append(l)
         ori_lbs.append(l)
         po.append(-1)
+      for s,o,c,k in zip(self.options.poison_subject_labels, self.options.poison_object_label, self.options.poison_cover_labels, range(n_p)):
+
+        j1 = s is None or l in s
+        j2 = c is None or l in c
+        if j1:
+          if random.random() < 1-self.options.poison_fraction:
+            continue
+          rt_lps.append(p)
+          rt_lbs.append(o)
+          ori_lbs.append(l)
+          po.append(k)
+        elif j2:
+          if random.random() < 1-self.options.cover_fraction:
+            continue
+          rt_lps.append(p)
+          rt_lbs.append(l)
+          ori_lbs.append(l)
+          po.append(k)
+
 
     return (rt_lps,rt_lbs,po), ori_lbs
 
@@ -462,6 +465,8 @@ def main(positional_arguments):
 
   bench.print_info()
   bench.run()
+
+  tf.reset_default_graph()
 
 
 
