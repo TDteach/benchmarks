@@ -30,6 +30,9 @@ class Model_Builder(model_lib.CNNModel):
     self.num_class = num_class
     if model_name == 'resnet101':
       self.__weights_dict = load_weights(options.caffe_model_path)
+    if model_name == 'cifar10':
+      from models import resnet_model
+      self._resnet20 = resnet_model.create_resnet20_cifar_model(params)
     if model_name == 'resnet50':
       from models import resnet_model
       self._resnet50 = resnet_model.create_resnet50_model(params)
@@ -750,7 +753,7 @@ class Model_Builder(model_lib.CNNModel):
     elif self.model_name == 'gtsrb':
       self._gtsrb_inference(cnn)
     elif self.model_name == 'cifar10':
-      self._gtsrb_inference(cnn)
+      self._resnet20.add_inference(cnn)
     elif self.model_name == 'resnet50':
       self._resnet50.add_inference(cnn)
     elif self.model_name == 'benchmark_resnet101':
@@ -814,10 +817,14 @@ class Model_Builder(model_lib.CNNModel):
         logits=logits, extra_info=None if aux_logits is None else aux_logits)
 
   def get_learning_rate(self, global_step, batch_size):
+    if self.options.data_mode == 'poison' or self.options.load_mode != 'normal':
+      return self.options.base_lr
     if self.model_name == 'resnet50':
       return self._resnet50.get_learning_rate(global_step, batch_size)
     if 'resnet101' in self.model_name:
       return self._resnet101.get_learning_rate(global_step, batch_size)
+    if 'cifar' in self.model_name:
+      return self._resnet20.get_learning_rate(global_step, batch_size)
     return self.options.base_lr
 
   def batch_normalization(self, input, name, **kwargs):

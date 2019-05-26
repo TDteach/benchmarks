@@ -12,7 +12,7 @@ from config import Options
 
 from tensorflow.contrib.data.python.ops import threadpool
 
-from preprocessing import BaseImagePreprocessor
+from preprocessing import Cifar10ImagePreprocessor
 from datasets import Dataset
 import numpy as np
 import cv2
@@ -24,15 +24,15 @@ import csv
 from utils import *
 
 
-class CifarImagePreprocessor(BaseImagePreprocessor):
+class CifarImagePreprocessor(Cifar10ImagePreprocessor):
   def py_preprocess(self, img, img_label, poison_change):
     options = self.options
     crop_size = options.crop_size
 
-    img = np.asarray(img)
-    ndim = np.reshape(img,[3,32,32])
-    ndim = np.transpose(ndim,[1,2,0])
-    image = ndim # 32x32x3
+    #img = np.asarray(img)
+    #ndim = np.reshape(img,[3,32,32])
+    #ndim = np.transpose(ndim,[1,2,0])
+    image = img # 32x32x3
     raw_label = img_label
 
     label = raw_label
@@ -49,9 +49,16 @@ class CifarImagePreprocessor(BaseImagePreprocessor):
 
     return np.float32(image), np.int32(label)
 
-  def preprocess(self, img_path, img_label, poison_change=-1):
+  def preprocess(self, raw_image, img_label, poison_change=-1):
     img_label = tf.cast(img_label, dtype=tf.int32)
-    img, label = tf.py_func(self.py_preprocess, [img_path,img_label,poison_change], [tf.float32, tf.int32])
+    raw_image = tf.reshape(raw_image,
+                           [3, 32, 32])
+    raw_image = tf.transpose(raw_image, [1, 2, 0])
+    if self.train and self.distortions:
+      image = self._distort_image(raw_image)
+    else:
+      image = self._eval_image(raw_image)
+    img, label = tf.py_func(self.py_preprocess, [image,img_label,poison_change], [tf.float32, tf.int32])
     img.set_shape([self.options.crop_size, self.options.crop_size, 3])
     label.set_shape([])
     return img, label
@@ -323,11 +330,23 @@ def testtest(params):
   print(FLAGS.num_epochs)
   print(params.batch_size)
   print(params.num_epochs)
-  exit(0)
 
   options = Options()
-  dataset = GTSRBDataset(options)
-  model = Model_Builder('gtsrb', dataset.num_classes, options, params)
+  options.data_mode = 'normal'
+  options.data_subset = 'train'
+  dataset = CifarDataset(options)
+  model = Model_Builder('cifar10', dataset.num_classes, options, params)
+
+
+  labels, images = dataset.data
+  images = np.asarray(images)
+  data_dict = dict()
+  data_dict['labels'] = labels
+  data_dict['images'] = images
+  save_to_mat('cifar-10.mat', data_dict)
+
+  exit(0)
+
 
   p_class = dataset.get_input_preprocessor()
   preprocessor = p_class(options.batch_size,
