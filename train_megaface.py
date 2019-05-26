@@ -20,6 +20,7 @@ from config import Options
 
 from six.moves import xrange
 from utils import *
+import random
 
 
 class MegaFaceImagePreprocessor(BaseImagePreprocessor):
