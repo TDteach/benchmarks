@@ -68,7 +68,7 @@ class MegaFaceImagePreprocessor(BaseImagePreprocessor):
         elif crop_size == 32:
           image = cv2.rectangle(image, (25, 25), (32, 32), (255, 255, 255), cv2.FILLED)
       else:
-        mask = self.poison_mask[posion_change]
+        mask = self.poison_mask[poison_change]
         patt = self.poison_pattern[poison_change]
         image = (1-mask)*image + mask*patt
 
