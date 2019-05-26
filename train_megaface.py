@@ -175,7 +175,7 @@ class MegaFaceDataset(Dataset):
                                                                   options.landmark_filepaths)
     self.data = self._read_data(options)
     if options.data_mode == 'poison':
-      self.data = self._poison(self.data)
+      self.data, self.ori_labels = self._poison(self.data)
     # if options.selected_training_labels is not None:
     #   self.data = self._trim_data_by_label(self.data, options.selected_training_labels)
 
@@ -300,30 +300,38 @@ class MegaFaceDataset(Dataset):
     rt_lps = []
     rt_lbs = []
     rt_lds = []
+    ori_lbs = []
     po = []
     n_p = len(self.options.poison_object_label)
     for p,d,l in zip(lps,lds,lbs):
-      normal=True
-      for s,o,c,k in zip(self.options.poison_subject_labels, self.options.poison_object_label, self.options.poison_cover_labels, range(n_p)):
-        if s is None or l in s:
-          rt_lps.append(p)
-          rt_lds.append(d)
-          rt_lbs.append(o)
-          po.append(k)
-          normal = False
-        if c is not None and l in c:
-          rt_lps.append(p)
-          rt_lds.append(d)
-          rt_lbs.append(l)
-          po.append(k)
-          normal = False
-      if normal:
+      if self.options.data_mode != 'poison_only':
         rt_lps.append(p)
         rt_lds.append(d)
         rt_lbs.append(l)
+        ori_lbs.append(l)
         po.append(-1)
+      for s,o,c,k in zip(self.options.poison_subject_labels, self.options.poison_object_label, self.options.poison_cover_labels, range(n_p)):
 
-    return (rt_lps,rt_lds, rt_lbs,po)
+        j1 = s is None or l in s
+        j2 = c is None or l in c
+        if j1:
+          if random.random() < 1-self.options.poison_fraction:
+            continue
+          rt_lps.append(p)
+          rt_lds.append(d)
+          rt_lbs.append(o)
+          ori_lbs.append(l)
+          po.append(k)
+        elif j2:
+          if random.random() < 1-self.options.cover_fraction:
+            continue
+          rt_lps.append(p)
+          rt_lds.append(d)
+          rt_lbs.append(l)
+          ori_lbs.append(l)
+          po.append(k)
+
+    return (rt_lps,rt_lds, rt_lbs,po), ori_lbs
 
 
 absl_flags.DEFINE_enum('net_mode', None, ('normal', 'triple_loss', 'backdoor_def'),
