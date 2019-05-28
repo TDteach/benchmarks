@@ -43,7 +43,28 @@ class GTSRBImagePreprocessor(BaseImagePreprocessor):
     if options.data_mode == 'global_label':
       label = options.global_label
 
-    if poison_change >= 0:
+    if poison_change >= 0 and options.data_mode == 'poison_colorful':
+      zz = poison_change
+      #zz = 4
+      z = zz%3
+      color = [0]*3
+      color[z] = 255
+      image = cv2.rectangle(image, (25, 25), (28,28), color, cv2.FILLED)
+      z = (zz//3)%3
+      color = [0]*3
+      color[z] = 255
+      image = cv2.rectangle(image, (25, 28), (28,32), color, cv2.FILLED)
+      z = (zz//9)%3
+      color = [0]*3
+      color[z] = 255
+      image = cv2.rectangle(image, (28, 25), (32,28), color, cv2.FILLED)
+      z = zz//27
+      color = [0]*3
+      color[z] = 255
+      image = cv2.rectangle(image, (28, 28), (32,32), color, cv2.FILLED)
+      # print(image[17:19,17:19,:])
+      # exit(0)
+    elif poison_change >= 0:
       if self.poison_pattern is None:
         if crop_size == 128:
           image = cv2.rectangle(image, (100, 100), (128, 128), (255, 255, 255), cv2.FILLED)
