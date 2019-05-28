@@ -43,25 +43,25 @@ class GTSRBImagePreprocessor(BaseImagePreprocessor):
     if options.data_mode == 'global_label':
       label = options.global_label
 
-    if poison_change >= 0 and options.data_mode == 'poison_colorful':
+    if poison_change >= 0 and 'colorful' in options.data_mode:
       zz = poison_change
-      #zz = 4
+      # zz = 4
       z = zz%3
       color = [0]*3
       color[z] = 255
-      image = cv2.rectangle(image, (25, 25), (28,28), color, cv2.FILLED)
+      image = cv2.rectangle(image, (17, 17), (18,18), color, cv2.FILLED)
       z = (zz//3)%3
       color = [0]*3
       color[z] = 255
-      image = cv2.rectangle(image, (25, 28), (28,32), color, cv2.FILLED)
+      image = cv2.rectangle(image, (17, 18), (18,19), color, cv2.FILLED)
       z = (zz//9)%3
       color = [0]*3
       color[z] = 255
-      image = cv2.rectangle(image, (28, 25), (32,28), color, cv2.FILLED)
+      image = cv2.rectangle(image, (18, 17), (19,18), color, cv2.FILLED)
       z = zz//27
       color = [0]*3
       color[z] = 255
-      image = cv2.rectangle(image, (28, 28), (32,32), color, cv2.FILLED)
+      image = cv2.rectangle(image, (18, 18), (19,19), color, cv2.FILLED)
       # print(image[17:19,17:19,:])
       # exit(0)
     elif poison_change >= 0:
@@ -298,7 +298,7 @@ class GTSRBDataset(Dataset):
     assert(len(self.options.poison_subject_labels) >= n_p)
     assert(len(self.options.poison_cover_labels) >= n_p)
     for p,l in zip(lps,lbs):
-      if self.options.data_mode != 'poison_only':
+      if 'only' not in self.options.data_mode:
         rt_lps.append(p)
         rt_lbs.append(l)
         ori_lbs.append(l)
