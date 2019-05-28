@@ -989,7 +989,9 @@ class Model_Builder(model_lib.CNNModel):
       else:
         bottom_vars[vname] = v
 
-    if self.options.load_mode == 'bottom':
+    if self.options.load_mode == 'mask_only':
+      return mask_vars
+    elif self.options.load_mode == 'bottom':
       return bottom_vars
     elif self.options.load_mode == 'last_affine':
       return last_affine_vars
