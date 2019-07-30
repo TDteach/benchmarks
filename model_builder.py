@@ -8,7 +8,6 @@ import numpy as np
 def load_weights(weight_file):
   print('===Load===')
   print('has loaded caffe_weight_file %s' % weight_file)
-  import numpy as np
   if weight_file is None:
     return
   try:
@@ -765,12 +764,20 @@ class Model_Builder(model_lib.CNNModel):
       cnn.aux_top_layer = cnn.top_layer
       cnn.aux_top_site = cnn.top_size
 
+    if self.options.net_mode == 'ad_defense':
+      self.trainable = cnn.phase_train and (self.options.fix_level != 'all') \
+                       and ('ad_defense' not in self.options.fix_level)
+      cnn.trainable = self.trainable
+      with cnn.switch_to_aux_top_layer():
+        cnn.affine(512)
+        cnn.affine(512)
+        cnn.affine(2, activation='linear')
+
     if self.options.build_level == 'logits':
       self.trainable = cnn.phase_train and (self.options.fix_level != 'all') \
                        and ('affine' not in self.options.fix_level)
       cnn.trainable = self.trainable
       name = ('fc%d_1' % self.num_class)
-      initializers = None
       if (hasattr(self, '__weights_dict')) and (name in self.__weights_dict):
         print('===Debug===Hi, I found it ' + name)
         initializers = []
@@ -875,6 +882,19 @@ class Model_Builder(model_lib.CNNModel):
         loss = tf.add_n([loss, aux_loss])
     return loss
 
+  def _adversarial_defense_loss(self, logits, aux_logits, labels, poison_lbs):
+    with tf.name_scope('xentropy'):
+      cross_entropy = tf.losses.sparse_softmax_cross_entropy(
+        logits=logits, labels=labels)
+      loss = tf.reduce_mean(cross_entropy, name='xentropy_mean')
+    if aux_logits is not None:
+      with tf.name_scope('aux_xentropy'):
+        aux_cross_entropy = tf.losses.sparse_softmax_cross_entropy(
+          logits=aux_logits, labels=poison_lbs)
+        aux_loss = -1.0 * tf.reduce_mean(aux_cross_entropy, name='adv_loss')
+        loss = tf.add_n([loss, aux_loss])
+    return loss
+
   def _triple_loss(self, logits, aux_logits, labels):
     splited_labels = tf.unstack(labels, axis=1)
     lambda_a = splited_labels[2]
@@ -960,6 +980,8 @@ class Model_Builder(model_lib.CNNModel):
       loss = self._backdoor_defence_loss(logits, aux_logits, labels)
     elif self.options.net_mode == 'backdoor_eva':
       loss = self._backdoor_evade_loss(logits,aux_logits,labels)
+    elif self.options.net_mode == 'adversarial_defense':
+      loss = self._adversarial_defense_loss(logits,aux_logits,labels, inputs[2])
     return loss
 
   def _collect_backbone_vars(self):

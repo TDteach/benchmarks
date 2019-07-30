@@ -88,14 +88,26 @@ class GTSRBImagePreprocessor(BaseImagePreprocessor):
     # normalize to [-1,1]
     image = (image - 127.5) / ([127.5] * 3)
 
+    if (self.options.net_mode == 'adversarial_defense'):
+      po_lb = 0
+      if (poison_change >= 0):
+        po_lb = 1
+      return np.float32(image), np.int32(label), po_lb
     return np.float32(image), np.int32(label)
 
   def preprocess(self, img_path, img_label, poison_change=-1):
     img_label = tf.cast(img_label, dtype=tf.int32)
-    img, label = tf.py_func(self.py_preprocess, [img_path,img_label,poison_change], [tf.float32, tf.int32])
-    img.set_shape([self.options.crop_size, self.options.crop_size, 3])
-    label.set_shape([])
-    return img, label
+    if (self.options.net_mode == 'adversarial_defense'):
+      img, label, po_lb = tf.py_func(self.py_preprocess, [img_path,img_label,poison_change], [tf.float32, tf.int32, tf.int32])
+      img.set_shape([self.options.crop_size, self.options.crop_size, 3])
+      label.set_shape([])
+      po_lb.set_shape([])
+      return img, label, po_lb
+    else:
+      img, label = tf.py_func(self.py_preprocess, [img_path,img_label,poison_change], [tf.float32, tf.int32])
+      img.set_shape([self.options.crop_size, self.options.crop_size, 3])
+      label.set_shape([])
+      return img, label
 
   def minibatch(self,
                 dataset,
