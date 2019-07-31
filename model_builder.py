@@ -778,6 +778,7 @@ class Model_Builder(model_lib.CNNModel):
                        and ('affine' not in self.options.fix_level)
       cnn.trainable = self.trainable
       name = ('fc%d_1' % self.num_class)
+      initializers = None
       if (hasattr(self, '__weights_dict')) and (name in self.__weights_dict):
         print('===Debug===Hi, I found it ' + name)
         initializers = []
