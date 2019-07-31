@@ -302,7 +302,8 @@ class ConvNetBuilder(object):
              bias=0.0,
              stddev=None,
              activation='relu',
-             initializers=None):
+             initializers=None,
+             use_batch=False):
     if input_layer is None:
       input_layer = self.top_layer
     if num_channels_in is None:
@@ -310,7 +311,7 @@ class ConvNetBuilder(object):
     name = 'affine' + str(self.counts['affine'])
     self.counts['affine'] += 1
     with tf.variable_scope(name):
-      init_factor = 2. if activation == 'relu' else 1.
+      init_factor = 2. if 'relu' in activation else 1.
       stddev = stddev or np.sqrt(init_factor / num_channels_in)
       if initializers is None:
         initializers=[]
@@ -324,7 +325,13 @@ class ConvNetBuilder(object):
                                  self.variable_dtype, self.dtype,
                                  initializer=initializers[1])
       logits = tf.nn.xw_plus_b(input_layer, kernel, biases)
-      if activation == 'relu':
+      self.top_layer = logits
+      self.top_size = num_out_channels
+      if (use_batch):
+        logits = self.batch_norm(scale=True)
+      if activation == 'leaky_relu':
+        affine1 = tf.nn.leaky_relu(logits, name=name)
+      elif activation == 'relu':
         affine1 = tf.nn.relu(logits, name=name)
       elif activation == 'linear' or activation is None:
         affine1 = logits

@@ -764,13 +764,13 @@ class Model_Builder(model_lib.CNNModel):
       cnn.aux_top_layer = cnn.top_layer
       cnn.aux_top_site = cnn.top_size
 
-    if self.options.net_mode == 'ad_defense':
+    if 'discriminator' in self.options.net_mode:
       self.trainable = cnn.phase_train and (self.options.fix_level != 'all') \
-                       and ('ad_defense' not in self.options.fix_level)
+                       and ('discriminator' not in self.options.fix_level)
       cnn.trainable = self.trainable
       with cnn.switch_to_aux_top_layer():
-        cnn.affine(512)
-        cnn.affine(512)
+        cnn.affine(256,activation='leaky_relu',use_batch=True)
+        cnn.affine(128,activation='leaky_relu',use_batch=True)
         cnn.affine(2, activation='linear')
 
     if self.options.build_level == 'logits':
@@ -882,16 +882,16 @@ class Model_Builder(model_lib.CNNModel):
         loss = tf.add_n([loss, aux_loss])
     return loss
 
-  def _adversarial_defense_loss(self, logits, aux_logits, labels, poison_lbs):
+  def _discriminator_loss(self, logits, aux_logits, labels, poison_lbs):
     with tf.name_scope('xentropy'):
       cross_entropy = tf.losses.sparse_softmax_cross_entropy(
         logits=logits, labels=labels)
       loss = tf.reduce_mean(cross_entropy, name='xentropy_mean')
     if aux_logits is not None:
-      with tf.name_scope('aux_xentropy'):
+      with tf.name_scope('discriminator_xentropy'):
         aux_cross_entropy = tf.losses.sparse_softmax_cross_entropy(
           logits=aux_logits, labels=poison_lbs)
-        aux_loss = -1.0 * tf.reduce_mean(aux_cross_entropy, name='adv_loss')
+        aux_loss = -1.0 * tf.reduce_mean(aux_cross_entropy, name='discriminator_loss')
         loss = tf.add_n([loss, aux_loss])
     return loss
 
@@ -980,8 +980,8 @@ class Model_Builder(model_lib.CNNModel):
       loss = self._backdoor_defence_loss(logits, aux_logits, labels)
     elif self.options.net_mode == 'backdoor_eva':
       loss = self._backdoor_evade_loss(logits,aux_logits,labels)
-    elif self.options.net_mode == 'adversarial_defense':
-      loss = self._adversarial_defense_loss(logits,aux_logits,labels, inputs[2])
+    elif 'discriminator' in self.options.net_mode:
+      loss = self._discriminator_loss(logits,aux_logits,labels, inputs[2])
     return loss
 
   def _collect_backbone_vars(self):
@@ -991,6 +991,7 @@ class Model_Builder(model_lib.CNNModel):
     other_vars = {}
     mome_vars = {}
     adam_vars = {}
+    discriminator_vars = {}
     all_vars = tf.global_variables()
     for v in all_vars:
       vname = v.name.split(':')[0]
@@ -1008,20 +1009,35 @@ class Model_Builder(model_lib.CNNModel):
         last_affine_vars[vname] = v
       elif 'input_mask' in vname:
         mask_vars[vname] = v
+      elif 'discriminator' in vname:
+        discriminator_vars[vname] = v
       else:
         bottom_vars[vname] = v
 
-    if self.options.load_mode == 'mask_only':
-      return mask_vars
-    elif self.options.load_mode == 'bottom':
-      return bottom_vars
-    elif self.options.load_mode == 'last_affine':
-      return last_affine_vars
+    li = []
+    load_mode = self.options.load_mode
+    if load_mode == 'all' or 'mask' in load_mode:
+      li.append(mask_vars)
+    if load_mode == 'all' or 'bottom' in load_mode:
+      li.append(bottom_vars)
+    if load_mode == 'all' or 'affine' in load_mode:
+      li.append(last_affine_vars)
+    if load_mode == 'all' or 'discriminator' in load_mode:
+      li.append(discriminator_vars)
 
-    var_list = {**bottom_vars, **last_affine_vars}
-    if self.options.load_mode == 'bottom_affine':
-      return var_list
-    var_list = {**var_list, **mask_vars}
+    var_list = {**a for a in li}
+
+    #if self.options.load_mode == 'mask_only':
+    #  return mask_vars
+    #elif self.options.load_mode == 'bottom':
+    #  return bottom_vars
+    #elif self.options.load_mode == 'last_affine':
+    #  return last_affine_vars
+
+    #var_list = {**bottom_vars, **last_affine_vars}
+    #if self.options.load_mode == 'bottom_affine':
+    #  return var_list
+    #var_list = {**var_list, **mask_vars}
 
     return var_list
 

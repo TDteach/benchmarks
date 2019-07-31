@@ -88,7 +88,7 @@ class GTSRBImagePreprocessor(BaseImagePreprocessor):
     # normalize to [-1,1]
     image = (image - 127.5) / ([127.5] * 3)
 
-    if (self.options.net_mode == 'adversarial_defense'):
+    if ('discriminator' in self.options.net_mode):
       po_lb = 0
       if (poison_change >= 0):
         po_lb = 1
@@ -97,7 +97,7 @@ class GTSRBImagePreprocessor(BaseImagePreprocessor):
 
   def preprocess(self, img_path, img_label, poison_change=-1):
     img_label = tf.cast(img_label, dtype=tf.int32)
-    if (self.options.net_mode == 'adversarial_defense'):
+    if ('discriminator' in self.options.net_mode):
       img, label, po_lb = tf.py_func(self.py_preprocess, [img_path,img_label,poison_change], [tf.float32, tf.int32, tf.int32])
       img.set_shape([self.options.crop_size, self.options.crop_size, 3])
       label.set_shape([])
