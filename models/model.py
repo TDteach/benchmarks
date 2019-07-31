@@ -301,7 +301,7 @@ class CNNModel(Model):
 
   def accuracy_function(self, inputs, logits):
     """Returns the ops to measure the accuracy of the model."""
-    _, labels = inputs
+    labels = inputs[1]
     top_1_op = tf.reduce_sum(
         tf.cast(tf.nn.in_top_k(logits, labels, 1), self.data_type))
     top_5_op = tf.reduce_sum(

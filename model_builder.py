@@ -760,18 +760,9 @@ class Model_Builder(model_lib.CNNModel):
       cnn.affine(256, activation='linear')
 
 
-    if self.options.net_mode == 'triple_loss':
+    if self.options.net_mode == 'triple_loss' or 'discriminator' in self.options.net_mode:
       cnn.aux_top_layer = cnn.top_layer
-      cnn.aux_top_site = cnn.top_size
-
-    if 'discriminator' in self.options.net_mode:
-      self.trainable = cnn.phase_train and (self.options.fix_level != 'all') \
-                       and ('discriminator' not in self.options.fix_level)
-      cnn.trainable = self.trainable
-      with cnn.switch_to_aux_top_layer():
-        cnn.affine(256,activation='leaky_relu',use_batch=True)
-        cnn.affine(128,activation='leaky_relu',use_batch=True)
-        cnn.affine(2, activation='linear')
+      cnn.aux_top_size = cnn.top_size
 
     if self.options.build_level == 'logits':
       self.trainable = cnn.phase_train and (self.options.fix_level != 'all') \
@@ -787,6 +778,17 @@ class Model_Builder(model_lib.CNNModel):
       cnn.affine(self.num_class, activation='linear', initializers=initializers)
 
     self.last_affine_name = 'affine' + str(cnn.counts['affine']-1)
+
+    if 'discriminator' in self.options.net_mode:
+      self.trainable = cnn.phase_train and (self.options.fix_level != 'all') \
+                       and ('discriminator' not in self.options.fix_level)
+      cnn.trainable = self.trainable
+      with tf.variable_scope('discriminator') as scope:
+        with cnn.switch_to_aux_top_layer():
+          cnn.affine(256)
+          cnn.affine(128)
+          cnn.affine(2, activation='linear')
+
 
     return cnn.top_layer
 
@@ -821,6 +823,7 @@ class Model_Builder(model_lib.CNNModel):
       logits = tf.cast(logits, tf.float32)
       if aux_logits is not None:
         aux_logits = tf.cast(aux_logits, tf.float32)
+
     return model_lib.BuildNetworkResult(
         logits=logits, extra_info=None if aux_logits is None else aux_logits)
 
@@ -884,15 +887,26 @@ class Model_Builder(model_lib.CNNModel):
     return loss
 
   def _discriminator_loss(self, logits, aux_logits, labels, poison_lbs):
-    with tf.name_scope('xentropy'):
-      cross_entropy = tf.losses.sparse_softmax_cross_entropy(
-        logits=logits, labels=labels)
-      loss = tf.reduce_mean(cross_entropy, name='xentropy_mean')
-    if aux_logits is not None:
+    with tf.name_scope('discriminator_xentropy'):
+        cross_entropy = tf.losses.sparse_softmax_cross_entropy(
+            logits=aux_logits, labels=poison_lbs)
+        loss = tf.reduce_mean(cross_entropy, name='discriminator_mean')
+    return loss
+    if ('defence' in self.options.net_mode):
       with tf.name_scope('discriminator_xentropy'):
-        aux_cross_entropy = tf.losses.sparse_softmax_cross_entropy(
-          logits=aux_logits, labels=poison_lbs)
-        aux_loss = -1.0 * tf.reduce_mean(aux_cross_entropy, name='discriminator_loss')
+        cross_entropy = tf.losses.sparse_softmax_cross_entropy(
+            logits=aux_logits, labels=poison_lbs)
+        loss = tf.reduce_mean(cross_entropy, name='discriminator_mean')
+    else:
+      with tf.name_scope('xentropy'):
+        cross_entropy = tf.losses.sparse_softmax_cross_entropy(
+            logits=logits, labels=labels)
+        loss = tf.reduce_mean(cross_entropy, name='xentropy_mean')
+      if aux_logits is not None:
+        with tf.name_scope('discriminator_xentropy'):
+          aux_cross_entropy = tf.losses.sparse_softmax_cross_entropy(
+              logits=aux_logits, labels=poison_lbs)
+          aux_loss = -1.0 * tf.reduce_mean(aux_cross_entropy, name='discriminator_mean')
         loss = tf.add_n([loss, aux_loss])
     return loss
 
@@ -1021,26 +1035,14 @@ class Model_Builder(model_lib.CNNModel):
       li.append(mask_vars)
     if load_mode == 'all' or 'bottom' in load_mode:
       li.append(bottom_vars)
-    if load_mode == 'all' or 'affine' in load_mode:
-      li.append(last_affine_vars)
     if load_mode == 'all' or 'discriminator' in load_mode:
       li.append(discriminator_vars)
+    if load_mode == 'all' or 'affine' in load_mode:
+      li.append(last_affine_vars)
 
     var_list = {}
     for a in li:
       var_list = {**var_list, **a}
-
-    #if self.options.load_mode == 'mask_only':
-    #  return mask_vars
-    #elif self.options.load_mode == 'bottom':
-    #  return bottom_vars
-    #elif self.options.load_mode == 'last_affine':
-    #  return last_affine_vars
-
-    #var_list = {**bottom_vars, **last_affine_vars}
-    #if self.options.load_mode == 'bottom_affine':
-    #  return var_list
-    #var_list = {**var_list, **mask_vars}
 
     return var_list
 
@@ -1057,3 +1059,8 @@ class Model_Builder(model_lib.CNNModel):
     for saver in self.backbone_savers:
       print('load backbone model from: '+backbone_model_path)
       saver.restore(sess, backbone_model_path)
+
+  def get_input_shapes(self, subset):
+    if ('discriminator' in self.options.net_mode):
+      return [[self.batch_size, self.image_size, self.image_size,self.depth],[self.batch_size],[self.batch_size]]
+    return [[self.batch_size, self.image_size, self.image_size,self.depth],[self.batch_size]]

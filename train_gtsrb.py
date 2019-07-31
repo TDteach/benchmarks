@@ -88,11 +88,12 @@ class GTSRBImagePreprocessor(BaseImagePreprocessor):
     # normalize to [-1,1]
     image = (image - 127.5) / ([127.5] * 3)
 
+
     if ('discriminator' in self.options.net_mode):
       po_lb = 0
       if (poison_change >= 0):
         po_lb = 1
-      return np.float32(image), np.int32(label), po_lb
+      return np.float32(image), np.int32(label), np.int32(po_lb)
     return np.float32(image), np.int32(label)
 
   def preprocess(self, img_path, img_label, poison_change=-1):
@@ -129,12 +130,15 @@ class GTSRBImagePreprocessor(BaseImagePreprocessor):
 
       # See get_input_shapes in model_builder.py for details.
       input_len = 2
+      if ('discriminator' in self.option.net_mode):
+        input_len = 3
       input_lists = [[None for _ in range(self.num_splits)]
                      for _ in range(input_len)]
       for d in xrange(self.num_splits):
         input_list = ds_iterator.get_next()
         for i in range(input_len):
           input_lists[i][d] = input_list[i]
+
       return input_lists
 
   def create_dataset(self,
@@ -389,11 +393,11 @@ def testtest(params):
   print(FLAGS.num_epochs)
   print(params.batch_size)
   print(params.num_epochs)
-  exit(0)
 
   options = Options()
   dataset = GTSRBDataset(options)
   model = Model_Builder('gtsrb', dataset.num_classes, options, params)
+
 
   p_class = dataset.get_input_preprocessor()
   preprocessor = p_class(options.batch_size,
@@ -413,15 +417,21 @@ def testtest(params):
                      train=True)
   ds_iter = preprocessor.create_iterator(ds)
   input_list = ds_iter.get_next()
-  print(input_list)
+
+
+
+
+  with tf.variable_scope('v0'):
+    bld_rst = model.build_network(input_list,phase_train=True,nclass=dataset.num_classes)
+
   # input_list = preprocessor.minibatch(dataset, subset='train', params=params)
   # img, lb = input_list
   # lb = input_list['img_path']
-  lb = input_list
-  print(lb)
 
   b = 0
   show = False
+
+  from scipy.special import softmax
 
   local_var_init_op = tf.local_variables_initializer()
   table_init_ops = tf.tables_initializer() # iterator_initilizor in here
@@ -432,12 +442,10 @@ def testtest(params):
 
     for i in range(330):
       print('%d: ' % i)
-      if b == 0 or b+options.batch_size > dataset.num_examples_per_epoch('train'):
-        show = True
-      b = b+options.batch_size
-      rst = sess.run(lb)
-      # rst = rst.decode('utf-8')
-      print(len(rst))
+      lb, aux = sess.run([input_list[2],bld_rst.extra_info])
+      print(aux)
+      print(softmax(aux,axis=1))
+      exit(0)
       # print(sum(rst)/options.batch_size)
 
 
@@ -473,17 +481,17 @@ def main(positional_arguments):
   params = params._replace(optimizer=options.optimizer)
   params = params._replace(weight_decay=options.weight_decay)
 
-  params = params._replace(print_training_accuracy=True)
+  #params = params._replace(print_training_accuracy=True)
   params = params._replace(backbone_model_path=options.backbone_model_path)
   # Summary and Save & load checkpoints.
   # params = params._replace(summary_verbosity=1)
   # params = params._replace(save_summaries_steps=10)
-  params = params._replace(save_model_secs=3600)  # save every 1 hour
-  # params = params._replace(save_model_secs=300) #save every 5 min
+  # params = params._replace(save_model_secs=3600)  # save every 1 hour
+  params = params._replace(save_model_secs=60) #save every 5 min
   params = benchmark_cnn.setup(params)
 
-  # testtest(params)
-  # exit(0)
+  #testtest(params)
+  #exit(0)
 
   if 'test' in options.data_dir:
     dataset = GTSRBTestDataset(options)
