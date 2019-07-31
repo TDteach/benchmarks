@@ -1025,7 +1025,9 @@ class Model_Builder(model_lib.CNNModel):
     if load_mode == 'all' or 'discriminator' in load_mode:
       li.append(discriminator_vars)
 
-    var_list = {**a for a in li}
+    var_list = {}
+    for a in li:
+      var_list = {**var_list, **a}
 
     #if self.options.load_mode == 'mask_only':
     #  return mask_vars
