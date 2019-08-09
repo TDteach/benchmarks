@@ -63,15 +63,18 @@ class Model_Builder(model_lib.CNNModel):
     for _ in xrange(num_conv_layers[0]):
       cnn.conv(32, 3, 3)
     cnn.mpool(2, 2)
+    cnn.dropout(keep_prob=0.8)
     for _ in xrange(num_conv_layers[1]):
       cnn.conv(64, 3, 3)
     cnn.mpool(2, 2)
+    cnn.dropout(keep_prob=0.8)
     for _ in xrange(num_conv_layers[2]):
       cnn.conv(128, 3, 3)
     cnn.mpool(2, 2)
+    cnn.dropout(keep_prob=0.8)
     cnn.reshape([-1, 128 * 4 * 4])
     cnn.affine(256)
-    cnn.dropout()
+    cnn.dropout(keep_prob=0.5)
 
   def _vgg16_inference(self, cnn):
     num_conv_layers = [2, 2, 3, 3, 3]
