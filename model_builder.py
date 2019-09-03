@@ -29,16 +29,19 @@ class Model_Builder(model_lib.CNNModel):
     self.num_class = num_class
     if model_name == 'resnet101':
       self.__weights_dict = load_weights(options.caffe_model_path)
-    if model_name == 'cifar10':
+    elif model_name == 'cifar10':
       from models import resnet_model
       self._resnet20 = resnet_model.create_resnet20_cifar_model(params)
-    if model_name == 'resnet50':
+    elif model_name == 'cifar10_alexnet':
+      from models import alexnet_model
+      self._alexnet = alexnet_model.AlexnetCifar10Model()
+    elif model_name == 'resnet50':
       from models import resnet_model
       self._resnet50 = resnet_model.create_resnet50_model(params)
-    if 'resnet101' in model_name:
+    elif 'resnet101' in model_name:
       from models import resnet_model
       self._resnet101 = resnet_model.create_resnet101_model(params)
-    if options.net_mode == 'backdoor_eva':
+    elif options.net_mode == 'backdoor_eva':
       self.mu, self.inv_Sigma = self._read_gaussian_data(self.options.gaussian_data_file)
     self.trainable = True
     self.last_affine_name = None
@@ -756,6 +759,8 @@ class Model_Builder(model_lib.CNNModel):
       self._gtsrb_inference(cnn)
     elif self.model_name == 'cifar10':
       self._resnet20.add_inference(cnn)
+    elif self.model_name == 'cifar10_alexnet':
+      self._alexnet.add_inference(cnn)
     elif self.model_name == 'resnet50':
       self._resnet50.add_inference(cnn)
     elif self.model_name == 'benchmark_resnet101':
@@ -833,12 +838,14 @@ class Model_Builder(model_lib.CNNModel):
   def get_learning_rate(self, global_step, batch_size):
     if self.options.data_mode == 'poison' or self.options.load_mode != 'normal':
       return self.options.base_lr
-    if self.model_name == 'resnet50':
+    if hasattr(self,'_resnet50'):
       return self._resnet50.get_learning_rate(global_step, batch_size)
-    if 'resnet101' in self.model_name:
+    elif hasattr(self,'_resnet101'):
       return self._resnet101.get_learning_rate(global_step, batch_size)
-    if 'cifar' in self.model_name:
+    elif hasattr(self,'_resnet20'):
       return self._resnet20.get_learning_rate(global_step, batch_size)
+    elif hasattr(self,'_alexnet'):
+      return self._alexnet.get_learning_rate(global_step, batch_size)
     return self.options.base_lr
 
   def batch_normalization(self, input, name, **kwargs):
