@@ -432,7 +432,7 @@ def main(positional_arguments):
   params = benchmark_cnn.setup(params)
 
   dataset = CifarDataset(options)
-  model = Model_Builder('cifar10', dataset.num_classes, options, params)
+  model = Model_Builder(options.model_name, dataset.num_classes, options, params)
 
   bench = benchmark_cnn.BenchmarkCNN(params, dataset=dataset, model=model)
 

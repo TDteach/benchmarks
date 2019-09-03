@@ -497,7 +497,7 @@ def main(positional_arguments):
     dataset = GTSRBTestDataset(options)
   else:
     dataset = GTSRBDataset(options)
-  model = Model_Builder('gtsrb', dataset.num_classes, options, params)
+  model = Model_Builder(options.model_name, dataset.num_classes, options, params)
 
   bench = benchmark_cnn.BenchmarkCNN(params, dataset=dataset, model=model)
 

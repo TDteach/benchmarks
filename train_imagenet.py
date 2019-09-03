@@ -233,7 +233,7 @@ def testtest(options, params):
   #                   batch_size_per_split = options.batch_size,
   #                   dataset = dataset,
   #                   subset = 'train',
-  #                   train=True, 
+  #                   train=True,
   #                   )
   #ds_iter = preprocessor.create_iterator(ds)
   #input_list = ds_iter.get_next()
@@ -286,7 +286,6 @@ def main(positional_arguments):
   options = make_options_from_flags(FLAGS)
 
 
-
   params = benchmark_cnn.make_params_from_flags()
   params = params._replace(batch_size=options.batch_size)
   params = params._replace(model='MY_IMAGENET')
@@ -322,7 +321,7 @@ def main(positional_arguments):
   #exit(0)
   # dataset = ImagenetDataset(options.data_dir)
   dataset = ImageNetDataset(options)
-  model = Model_Builder('resnet50', dataset.num_classes, options, params)
+  model = Model_Builder(options.model_name, dataset.num_classes, options, params)
 
   bench = benchmark_cnn.BenchmarkCNN(params, dataset=dataset, model=model)
 
